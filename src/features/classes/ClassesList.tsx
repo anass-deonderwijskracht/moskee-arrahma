@@ -1,10 +1,10 @@
-import { useState } from "react";
+import { useState, type MouseEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { Section, Card, Btn, Icon, Select, Badge, Pills, QBar, pct, metricKind, type Option } from "@/components/ui";
 import { Modal, Field, ModalFooter } from "@/components/ui/Modal";
 import { Loading, ErrorState } from "@/features/_shared/states";
 import { useToast } from "@/components/chrome/Toast";
-import { useClasses, useClassMetrics, useCreateClass } from "@/data/classes";
+import { useClasses, useClassMetrics, useCreateClass, type ClassRow } from "@/data/classes";
 import { useTeachers } from "@/data/people";
 import { useSchooljaren, useCurrentSchooljaar } from "@/data/schooljaren";
 import { KlassenOverzichtKanban } from "./KlassenOverzichtKanban";
@@ -28,13 +28,34 @@ export function ClassesList() {
   const toast = useToast();
   const m = metrics ?? {};
   const [adding, setAdding] = useState(false);
-  const [form, setForm] = useState({ code: "", grade: 1, track: "regulier", day: "Zaterdag", time: "09:30 - 11:30", location: "Moskee Arrahma", capacity: 22, teacher_id: "", quran_teacher_id: "" });
+  const [form, setForm] = useState({ code: "", grade: 1, track: "regulier", day: "Zaterdag", time: "09:00 - 12:00", location: "Moskee Arrahma", capacity: 13, teacher_id: "", quran_teacher_id: "" });
   const saveClass = async () => {
     if (!effectiveSj) return;
     try {
       await createClass.mutateAsync({ ...form, teacher_id: form.teacher_id || null, quran_teacher_id: form.quran_teacher_id || null, schooljaar_id: effectiveSj, color: COLORS[(data?.length ?? 0) % COLORS.length] });
       toast("Klas toegevoegd"); setAdding(false);
     } catch (e) { toast("Toevoegen mislukt: " + (e instanceof Error ? e.message : "")); }
+  };
+
+  const duplicateClass = async (c: ClassRow, e: MouseEvent) => {
+    e.stopPropagation();
+    if (!effectiveSj) return;
+    try {
+      await createClass.mutateAsync({
+        code: `${c.code} (kopie)`,
+        grade: c.grade ?? 1,
+        track: c.track,
+        day: c.day ?? "Zaterdag",
+        time: c.time ?? "09:00 - 12:00",
+        location: c.location ?? "Moskee Arrahma",
+        capacity: c.capacity ?? 13,
+        teacher_id: c.teacher_id,
+        quran_teacher_id: c.quran_teacher_id,
+        schooljaar_id: effectiveSj,
+        color: c.color ?? COLORS[(data?.length ?? 0) % COLORS.length],
+      });
+      toast(`Klas "${c.code}" gedupliceerd`);
+    } catch (err) { toast("Dupliceren mislukt: " + (err instanceof Error ? err.message : "")); }
   };
 
   if (isError) return <ErrorState error={error} />;
@@ -78,7 +99,10 @@ export function ClassesList() {
                     </h3>
                     <div className="card-sub mt-1">{c.day} · {c.time}</div>
                   </div>
-                  <Badge kind={c.track === "hifdh" ? "accent" : "info"}>{c.track === "hifdh" ? "Hifdh" : "Regulier"}</Badge>
+                  <div className="flex items-center gap-1">
+                    <Badge kind={c.track === "hifdh" ? "accent" : "info"}>{c.track === "hifdh" ? "Hifdh" : "Regulier"}</Badge>
+                    <button className="btn ghost sm" title="Klas dupliceren" disabled={createClass.isPending} onClick={(e) => duplicateClass(c, e)}><Icon name="copy" size={14} /></button>
+                  </div>
                 </div>
                 <div className="flex-col gap-2">
                   <div className="text-xs text-subtle">Docent: <span className="text-muted">{c.teacher?.short ?? "—"}</span></div>
@@ -117,7 +141,12 @@ export function ClassesList() {
                     <td className="text-sm">{c.day} · {c.time}</td>
                     <td className="num">{cm?.leerling_count ?? 0} / {c.capacity}</td>
                     <td><Badge kind={metricKind(cm?.avg_attendance_pct)}>{pct(cm?.avg_attendance_pct)}</Badge></td>
-                    <td><Icon name="chevronRight" size={14} /></td>
+                    <td>
+                      <div className="flex items-center gap-1 justify-end">
+                        <button className="btn ghost sm" title="Klas dupliceren" disabled={createClass.isPending} onClick={(e) => duplicateClass(c, e)}><Icon name="copy" size={14} /></button>
+                        <Icon name="chevronRight" size={14} />
+                      </div>
+                    </td>
                   </tr>
                 );
               })}

@@ -1,10 +1,8 @@
 import { useState } from "react";
-import { Outlet, useLocation, NavLink } from "react-router-dom";
+import { Outlet, NavLink } from "react-router-dom";
 import { Sidebar } from "./Sidebar";
-import { TopBar } from "./TopBar";
 import { TweaksPanel } from "./TweaksPanel";
 import { useTweaks } from "./useTweaks";
-import { metaFor } from "./routeMeta";
 
 const TOPNAV = [
   { to: "/dashboard", label: "Dashboard" },
@@ -48,14 +46,11 @@ function TopNavRow() {
 export function AppShell() {
   const { tweaks, set } = useTweaks();
   const [collapsed, setCollapsed] = useState(false);
-  const location = useLocation();
-  const meta = metaFor(location.pathname);
 
   return (
     <div className="app" data-collapsed={collapsed} data-nav={tweaks.navigation}>
       {tweaks.navigation === "sidebar" && <Sidebar collapsed={collapsed} setCollapsed={setCollapsed} />}
       <div className="main">
-        <TopBar title={meta.title} breadcrumb={meta.crumbs} />
         {tweaks.navigation === "topnav" && <TopNavRow />}
         <main className="page">
           <div className="page-narrow">

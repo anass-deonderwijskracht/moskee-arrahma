@@ -7,7 +7,7 @@ export type IconName =
   | "chevronLeft" | "arrowUp" | "arrowDown" | "check" | "x" | "dots" | "filter"
   | "more" | "menu" | "panelLeft" | "panelRight" | "star" | "download" | "upload"
   | "edit" | "trash" | "mail" | "phone" | "pin" | "eye" | "clock" | "layoutGrid"
-  | "layoutList" | "sparkles" | "activity" | "list" | "flag" | "chart" | "logout";
+  | "layoutList" | "sparkles" | "activity" | "list" | "flag" | "chart" | "logout" | "copy";
 
 const ICON_PATHS: Record<string, string> = {
   home: "M3 12L12 4l9 8M5 10v10h14V10",
@@ -53,6 +53,7 @@ const ICON_PATHS: Record<string, string> = {
   flag: "M4 21V4m0 0h12l-2 4 2 4H4",
   chart: "M3 3v18h18M7 14l3-3 3 3 5-5",
   logout: "M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9",
+  copy: "M9 9h10v10H9V9ZM5 15H4V4h11v1",
 };
 
 export function Icon({

@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Card, Btn, Badge, Select } from "@/components/ui";
+import { Modal, Field, ModalFooter } from "@/components/ui/Modal";
 import { Loading, ErrorState } from "@/features/_shared/states";
 import { useToast } from "@/components/chrome/Toast";
-import { usePlanningMatrix, useSaveLessons, type LessonPatch } from "@/data/planning";
+import { usePlanningMatrix, useSaveLessons, useCreateLessons, type LessonPatch } from "@/data/planning";
 import { useTeachers } from "@/data/people";
 import { useSchooljaren, useCurrentSchooljaar } from "@/data/schooljaren";
 
@@ -43,6 +44,7 @@ export function Roostermatrix() {
   const { data, isLoading, isError, error } = usePlanningMatrix(effectiveSj);
   const { data: teachers } = useTeachers();
   const save = useSaveLessons(effectiveSj);
+  const createLessons = useCreateLessons(effectiveSj);
 
   const classes = data?.classes ?? [];
   const weeks = data?.weeks ?? [];
@@ -54,6 +56,7 @@ export function Roostermatrix() {
   const [edits, setEdits] = useState<Record<string, CellState>>({});
   const [dirty, setDirty] = useState<Set<string>>(new Set());
   const [flashWeek, setFlashWeek] = useState<number | null>(null);
+  const [addLesson, setAddLesson] = useState<{ date: string; week_nr: string; topic: string; type: string } | null>(null);
   const rowRefs = useRef<Record<number, HTMLTableRowElement | null>>({});
 
   // Select all classes by default once they load.
@@ -146,6 +149,27 @@ export function Roostermatrix() {
     catch (e) { toast("Opslaan mislukt: " + (e instanceof Error ? e.message : "")); }
   };
 
+  const selectedCount = classes.filter((c) => selected.has(c.id)).length;
+  const openAddLesson = () => {
+    const nextWeek = weeks.length ? Math.max(...weeks.map((w) => w.week_nr)) + 1 : 35;
+    const lastDate = weeks.length ? weeks[weeks.length - 1].date : null;
+    const suggest = lastDate ? new Date(new Date(lastDate).getTime() + 7 * 864e5) : new Date();
+    setAddLesson({ date: suggest.toISOString().slice(0, 10), week_nr: String(nextWeek), topic: "Wekelijkse les", type: "les" });
+  };
+  const submitAddLesson = async () => {
+    if (!addLesson) return;
+    const classIds = classes.filter((c) => selected.has(c.id)).map((c) => c.id);
+    try {
+      const n = await createLessons.mutateAsync({
+        classIds, date: addLesson.date,
+        week_nr: addLesson.week_nr.trim() === "" ? null : (parseInt(addLesson.week_nr) || null),
+        topic: addLesson.topic.trim() || "Wekelijkse les", type: addLesson.type,
+      });
+      toast(`Les aangemaakt voor ${n} klas(sen)`);
+      setAddLesson(null);
+    } catch (e) { toast("Aanmaken mislukt: " + (e instanceof Error ? e.message : "")); }
+  };
+
   if (isLoading) return <Loading label="Rooster laden…" />;
 
   return (
@@ -165,6 +189,7 @@ export function Roostermatrix() {
             })}
           </div>
           <div className="flex items-center gap-2">
+            <Btn kind="ghost" icon="plus" onClick={openAddLesson} disabled={selectedCount === 0} title={selectedCount === 0 ? "Selecteer eerst klassen" : `Nieuwe les voor ${selectedCount} klas(sen)`}>Nieuwe les</Btn>
             <Btn kind="ghost" icon="calendar" onClick={goToCurrentWeek} disabled={!currentWeek}>Huidige week</Btn>
             <Select value={effectiveSj ?? ""} onChange={(e) => setSjId(e.target.value)} style={{ width: "auto", minWidth: 120 }}>
               {(schooljaren ?? []).map((s) => <option key={s.id} value={s.id}>{s.name}{s.is_current ? " (huidig)" : ""}</option>)}
@@ -286,6 +311,23 @@ export function Roostermatrix() {
           </div>
         )}
       </Card>
+
+      {addLesson && (
+        <Modal title="Nieuwe les" sub={`Maakt in één keer een les aan voor ${selectedCount} geselecteerde klas(sen).`} onClose={() => setAddLesson(null)} width={460}
+          footer={<ModalFooter onCancel={() => setAddLesson(null)} onSave={submitAddLesson} saving={createLessons.isPending} saveLabel="Les aanmaken" disabled={!addLesson.date} />}>
+          <div className="flex gap-3">
+            <Field label="Datum"><input className="input" type="date" value={addLesson.date} onChange={(e) => setAddLesson((s) => s && { ...s, date: e.target.value })} /></Field>
+            <Field label="Lesweek (nr.)"><input className="input" type="number" value={addLesson.week_nr} onChange={(e) => setAddLesson((s) => s && { ...s, week_nr: e.target.value })} placeholder="bv. 42" /></Field>
+          </div>
+          <Field label="Type">
+            <Select value={addLesson.type} onChange={(e) => setAddLesson((s) => s && { ...s, type: e.target.value })}>
+              {Object.entries(TYPE_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+            </Select>
+          </Field>
+          <Field label="Onderwerp"><input className="input" value={addLesson.topic} onChange={(e) => setAddLesson((s) => s && { ...s, topic: e.target.value })} placeholder="Wekelijkse les" /></Field>
+          <div className="text-xs text-subtle">Klassen: {classes.filter((c) => selected.has(c.id)).map((c) => c.code).join(", ") || "—"}</div>
+        </Modal>
+      )}
     </div>
   );
 }

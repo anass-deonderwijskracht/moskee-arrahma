@@ -50,6 +50,30 @@ export function usePlanningMatrix(schooljaarId: string | null) {
   });
 }
 
+export interface NewLessonInput { classIds: string[]; date: string; week_nr: number | null; topic: string; type: string }
+
+/** Create one lesson per selected class at once (e.g. add a new lesweek across classes). */
+export function useCreateLessons(schooljaarId: string | null) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: NewLessonInput) => {
+      const rows = input.classIds.map((class_id) => ({
+        class_id, date: input.date, week_nr: input.week_nr,
+        topic: input.topic, type: input.type, location: "Moskee Arrahma",
+      }));
+      if (rows.length === 0) return 0;
+      const { error } = await supabase.from("lessons").insert(rows as never);
+      if (error) throw error;
+      await supabase.from("audit_log").insert({ action: "les aangemaakt", object: `${rows.length} klas(sen)${input.week_nr != null ? ` · week ${input.week_nr}` : ""}`, type: "plan", user_label: "Beheerder" } as never);
+      return rows.length;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["planning-matrix", schooljaarId] });
+      qc.invalidateQueries({ queryKey: ["lessons"] });
+    },
+  });
+}
+
 export interface LessonPatch { id: string; teacher_id: string | null; quran_teacher_id: string | null; type: string; teacher_na: boolean; quran_na: boolean }
 
 export function useSaveLessons(schooljaarId: string | null) {
