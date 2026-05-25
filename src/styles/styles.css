@@ -924,9 +924,61 @@ select:not(.select):not([multiple]) {
 }
 @keyframes toastIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 
+/* Mobile top bar + drawer backdrop (desktop: hidden) */
+.mobile-bar { display: none; }
+.nav-backdrop { display: none; }
+
 /* Responsive */
 @media (max-width: 900px) {
-  .app { grid-template-columns: 1fr; }
-  .sidebar { display: none; }
-  :root { --pad-page: 18px; }
+  :root { --pad-page: 16px; }
+
+  /* Single column; sidebar becomes an off-canvas drawer. */
+  .app,
+  .app[data-collapsed="true"],
+  .app[data-nav="topnav"] { grid-template-columns: 1fr; }
+
+  .sidebar {
+    position: fixed;
+    top: 0; left: 0; bottom: 0;
+    width: var(--sidebar-w);
+    max-width: 84vw;
+    z-index: 70;
+    transform: translateX(-100%);
+    transition: transform 0.22s ease;
+    box-shadow: var(--shadow-lg);
+  }
+  .app[data-mobilenav="open"] .sidebar { transform: translateX(0); }
+  /* Drawer always shows full labels, even if collapsed on desktop. */
+  .app[data-collapsed="true"] .sidebar-link span:not(.icon),
+  .app[data-collapsed="true"] .sidebar-foot .who { display: inline; }
+  .app[data-collapsed="true"] .sidebar-group { opacity: 1; height: auto; padding: revert; overflow: visible; }
+
+  .nav-backdrop {
+    display: block;
+    position: fixed; inset: 0;
+    background: oklch(0 0 0 / 0.4);
+    z-index: 65;
+  }
+
+  /* Slim app bar with the hamburger; only on mobile. */
+  .mobile-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 52px;
+    flex-shrink: 0;
+    padding: 0 12px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-elev);
+    position: sticky;
+    top: 0;
+    z-index: 30;
+  }
+  .mobile-bar-title { font-weight: 600; font-size: 15px; letter-spacing: -0.01em; }
+
+  /* Keep the page from scrolling sideways; tables scroll inside their card. */
+  .page { overflow-x: hidden; }
+  .card:has(.table) { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .card .table { min-width: 560px; }
+  .table th, .table td { white-space: nowrap; }
 }

@@ -1,8 +1,23 @@
-import { useState } from "react";
-import { Outlet, NavLink } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Outlet, NavLink, useLocation } from "react-router-dom";
+import { Icon } from "@/components/ui";
 import { Sidebar } from "./Sidebar";
 import { TweaksPanel } from "./TweaksPanel";
 import { useTweaks } from "./useTweaks";
+
+/** True while the viewport is at the mobile breakpoint (matches the CSS @media). */
+function useIsMobile(): boolean {
+  const [isMobile, setIsMobile] = useState(() =>
+    typeof window !== "undefined" && window.matchMedia("(max-width: 900px)").matches,
+  );
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 900px)");
+    const onChange = () => setIsMobile(mq.matches);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+  return isMobile;
+}
 
 const TOPNAV = [
   { to: "/dashboard", label: "Dashboard" },
@@ -46,11 +61,28 @@ function TopNavRow() {
 export function AppShell() {
   const { tweaks, set } = useTweaks();
   const [collapsed, setCollapsed] = useState(false);
+  const isMobile = useIsMobile();
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const location = useLocation();
+
+  // Close the mobile drawer whenever the route changes.
+  useEffect(() => { setMobileNavOpen(false); }, [location.pathname]);
+
+  const showSidebar = tweaks.navigation === "sidebar";
 
   return (
-    <div className="app" data-collapsed={collapsed} data-nav={tweaks.navigation}>
-      {tweaks.navigation === "sidebar" && <Sidebar collapsed={collapsed} setCollapsed={setCollapsed} />}
+    <div className="app" data-collapsed={collapsed} data-nav={tweaks.navigation} data-mobilenav={mobileNavOpen ? "open" : "closed"}>
+      {showSidebar && <Sidebar collapsed={isMobile ? false : collapsed} setCollapsed={setCollapsed} />}
+      {mobileNavOpen && <div className="nav-backdrop" onClick={() => setMobileNavOpen(false)} />}
       <div className="main">
+        <div className="mobile-bar">
+          {showSidebar && (
+            <button className="btn ghost sm" aria-label="Menu openen" onClick={() => setMobileNavOpen(true)}>
+              <Icon name="menu" size={18} />
+            </button>
+          )}
+          <span className="mobile-bar-title">Moskee Arrahma</span>
+        </div>
         {tweaks.navigation === "topnav" && <TopNavRow />}
         <main className="page">
           <div className="page-narrow">
