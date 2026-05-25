@@ -1,0 +1,233 @@
+import { useMemo, useState } from "react";
+import { Section, Card, Stat, Btn, Icon, Badge, Select, EUR, type BadgeKind } from "@/components/ui";
+import { Modal, Field, ModalFooter } from "@/components/ui/Modal";
+import { Loading, ErrorState } from "@/features/_shared/states";
+import { useToast } from "@/components/chrome/Toast";
+import { useSchooljaren, useCurrentSchooljaar } from "@/data/schooljaren";
+import { useFinance, useAppSettings, useAddExpense, useAddIncome, budgetForCategory } from "@/data/finance";
+
+const CAT_KIND: Record<string, BadgeKind> = { Materialen: "accent", Salaris: "primary", Faciliteit: "info", Activiteit: "success", Catering: "warn", Software: "default" };
+const CATEGORIES = ["Materialen", "Salaris", "Faciliteit", "Activiteit", "Catering", "Software", "Overig"];
+const INCOME_SOURCES = ["Sponsor", "Donatie", "Subsidie", "Fondsen", "Overig"];
+
+export function FinanceScreen() {
+  const toast = useToast();
+  const { data: schooljaren } = useSchooljaren();
+  const { data: current } = useCurrentSchooljaar();
+  const [sjId, setSjId] = useState<string | null>(null);
+  const effectiveSj = sjId ?? current?.id ?? null;
+  const schooljaar = (schooljaren ?? []).find((s) => s.id === effectiveSj);
+  const isCurrent = !!schooljaar?.is_current;
+
+  const { data: settings } = useAppSettings();
+  const { data, isLoading, isError, error } = useFinance(effectiveSj);
+  const addExpense = useAddExpense();
+  const addIncome = useAddIncome();
+  const [showAddExpense, setShowAddExpense] = useState(false);
+  const [showAddIncome, setShowAddIncome] = useState(false);
+
+  const regRate = settings?.tuition_regulier_eur ?? 220;
+  const hifdhRate = settings?.tuition_hifdh_eur ?? 350;
+  const expenses = data?.expenses ?? [];
+  const incomes = data?.incomes ?? [];
+  const budgets = data?.budgets ?? [];
+  const reg = data?.regulier ?? { capacity: 0, enrolled: 0 };
+  const hif = data?.hifdh ?? { capacity: 0, enrolled: 0 };
+
+  const tuitionBudget = reg.capacity * regRate + hif.capacity * hifdhRate;       // capaciteit × tarief
+  const tuitionEnrolled = reg.enrolled * regRate + hif.enrolled * hifdhRate;     // o.b.v. inschrijvingen
+  const manualIncome = incomes.reduce((a, i) => a + Number(i.amount), 0);
+  const totalIncome = tuitionBudget + manualIncome;
+  const totalExpenses = expenses.reduce((a, x) => a + Number(x.amount), 0);
+  const budgetTotal = budgets.reduce((a, c) => a + Number(c.planned), 0);
+
+  const spentByBudget = useMemo(() => {
+    const m: Record<string, number> = {};
+    for (const x of expenses) { const b = budgetForCategory(x.category); if (b) m[b] = (m[b] ?? 0) + Number(x.amount); }
+    return m;
+  }, [expenses]);
+
+  const incomeBySource = useMemo(() => {
+    const m: Record<string, number> = {};
+    for (const i of incomes) { const s = i.source ?? "Overig"; m[s] = (m[s] ?? 0) + Number(i.amount); }
+    return m;
+  }, [incomes]);
+
+  if (isError) return <ErrorState error={error} />;
+
+  return (
+    <>
+      <Section
+        title="Financiën"
+        sub={`Schooljaar ${schooljaar?.name ?? ""}${isCurrent ? " (huidig)" : " · archief"} · begroting o.b.v. max. bezetting × tarief per traject`}
+        actions={
+          <>
+            <Select value={effectiveSj ?? ""} onChange={(e) => setSjId(e.target.value)} style={{ width: "auto", minWidth: 150 }}>
+              {(schooljaren ?? []).map((s) => <option key={s.id} value={s.id}>Schooljaar {s.name}{s.is_current ? " (huidig)" : ""}</option>)}
+            </Select>
+            {isCurrent && <Btn icon="plus" kind="ghost" onClick={() => setShowAddIncome(true)}>Inkomst toevoegen</Btn>}
+            {isCurrent && <Btn icon="plus" kind="primary" onClick={() => setShowAddExpense(true)}>Uitgave toevoegen</Btn>}
+          </>
+        }
+      >
+        {isLoading ? <Loading /> : (
+          <>
+            <div className="stat-grid mb-6">
+              <Stat label="Begrote inkomsten" value={EUR(totalIncome)} sub={`collegegeld ${EUR(tuitionBudget)} + overig ${EUR(manualIncome)}`} icon="arrowUp" deltaKind="up" />
+              <Stat label="Totale uitgaven" value={EUR(totalExpenses)} sub={budgetTotal ? Math.round((totalExpenses / budgetTotal) * 100) + "% van begroting" : ""} icon="arrowDown" />
+              <Stat label="Saldo (begroot)" value={EUR(totalIncome - totalExpenses)} sub={isCurrent ? "prognose seizoen" : "definitief"} icon="coins" deltaKind={totalIncome > totalExpenses ? "up" : "down"} />
+              <Stat label="Ontvangen collegegeld" value={EUR(data?.paidTuition ?? 0)} sub={`${data?.openCount ?? 0} openstaand`} icon="check" />
+            </div>
+
+            <div className="grid-2 mb-6">
+              <Card title="Begroting vs werkelijk" sub="Uitgaven per categorie · cumulatief">
+                {budgets.length === 0 ? <div className="empty">Geen begroting ingesteld.</div> : (
+                  <div className="flex-col gap-4">
+                    {budgets.map((c) => {
+                      const spent = spentByBudget[c.name] ?? 0;
+                      const ratio = Number(c.planned) ? (spent / Number(c.planned)) * 100 : 0;
+                      const over = ratio > 100;
+                      return (
+                        <div key={c.id}>
+                          <div className="flex justify-between items-center mb-1" style={{ fontSize: 13 }}>
+                            <span className="font-semibold">{c.name}</span>
+                            <span className="num text-sm"><b>{EUR(spent)}</b> <span className="text-subtle">/ {EUR(Number(c.planned))}</span></span>
+                          </div>
+                          <div style={{ position: "relative", height: 10, background: "var(--bg-sunken)", borderRadius: 999, overflow: "hidden" }}>
+                            <div style={{ position: "absolute", left: 0, top: 0, height: "100%", width: Math.min(100, ratio) + "%", background: over ? "var(--danger)" : ratio > 80 ? "var(--warn)" : "var(--primary)", borderRadius: 999 }} />
+                          </div>
+                          <div className="text-xs text-subtle mt-1">{over ? <span style={{ color: "var(--danger)" }}>Overschrijding {EUR(spent - Number(c.planned))}</span> : Math.round(ratio) + "% gebruikt"}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </Card>
+
+              <Card title="Inkomsten samenstelling" sub="Begroting o.b.v. tarief per traject + handmatige inkomsten"
+                action={isCurrent ? <Btn size="sm" icon="plus" onClick={() => setShowAddIncome(true)}>Inkomst</Btn> : undefined}>
+                <div className="flex-col gap-3">
+                  <IncomeRow label={`Collegegeld regulier (${reg.capacity}× ${EUR(regRate)})`} value={reg.capacity * regRate} total={totalIncome} color="var(--primary)" note={`${reg.enrolled} nu ingeschreven`} />
+                  <IncomeRow label={`Collegegeld hifdh (${hif.capacity}× ${EUR(hifdhRate)})`} value={hif.capacity * hifdhRate} total={totalIncome} color="var(--accent)" note={`${hif.enrolled} nu ingeschreven`} />
+                  {Object.entries(incomeBySource).map(([src, val], i) => (
+                    <IncomeRow key={src} label={src} value={val} total={totalIncome} color={["var(--info)", "var(--success)", "var(--warn)"][i % 3]} />
+                  ))}
+                </div>
+                <div className="divider mt-4 mb-3" />
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-semibold">Totaal begroot</span>
+                  <span className="text-lg font-semibold num">{EUR(totalIncome)}</span>
+                </div>
+                <div className="text-xs text-subtle mt-1">O.b.v. inschrijvingen: {EUR(tuitionEnrolled + manualIncome)}</div>
+              </Card>
+            </div>
+
+            {incomes.length > 0 && (
+              <Card title={<><Icon name="arrowUp" size={14} /> Handmatige inkomsten</>} sub={`${incomes.length} posten · schooljaar ${schooljaar?.name ?? ""}`} className="mb-6">
+                <table className="table">
+                  <thead><tr><th>Datum</th><th>Bron</th><th>Omschrijving</th><th style={{ textAlign: "right" }}>Bedrag</th></tr></thead>
+                  <tbody>
+                    {incomes.map((i) => (
+                      <tr key={i.id}>
+                        <td className="font-mono text-sm">{i.date}</td>
+                        <td><Badge kind="success">{i.source}</Badge></td>
+                        <td>{i.description}</td>
+                        <td className="num font-semibold" style={{ textAlign: "right" }}>{EUR(Number(i.amount))}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </Card>
+            )}
+
+            <Card title={<><Icon name="list" size={14} /> Uitgaven</>} sub={`${expenses.length} uitgaven · schooljaar ${schooljaar?.name ?? ""}`}>
+              {expenses.length === 0 ? <div className="empty">Nog geen uitgaven voor dit schooljaar.</div> : (
+                <table className="table">
+                  <thead><tr><th>Datum</th><th>Categorie</th><th>Beschrijving</th><th>Leverancier</th><th style={{ textAlign: "right" }}>Bedrag</th></tr></thead>
+                  <tbody>
+                    {expenses.map((x) => (
+                      <tr key={x.id}>
+                        <td className="font-mono text-sm">{x.date}</td>
+                        <td><Badge kind={CAT_KIND[x.category ?? ""] ?? "default"}>{x.category}</Badge></td>
+                        <td>{x.description}</td>
+                        <td className="text-sm text-subtle">{x.vendor}</td>
+                        <td className="num font-semibold" style={{ textAlign: "right" }}>{EUR(Number(x.amount))}</td>
+                      </tr>
+                    ))}
+                    <tr style={{ background: "var(--bg-sunken)", fontWeight: 600 }}>
+                      <td colSpan={4} style={{ textAlign: "right", padding: "12px 16px" }}>Totaal</td>
+                      <td className="num" style={{ textAlign: "right", padding: "12px 16px" }}>{EUR(totalExpenses)}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              )}
+            </Card>
+          </>
+        )}
+      </Section>
+
+      {showAddExpense && effectiveSj && (
+        <AddExpenseModal onClose={() => setShowAddExpense(false)} pending={addExpense.isPending}
+          onSave={async (row) => { try { await addExpense.mutateAsync({ ...row, schooljaar_id: effectiveSj }); toast("Uitgave toegevoegd"); setShowAddExpense(false); } catch (e) { toast("Opslaan mislukt: " + (e instanceof Error ? e.message : "")); } }} />
+      )}
+      {showAddIncome && effectiveSj && (
+        <AddIncomeModal onClose={() => setShowAddIncome(false)} pending={addIncome.isPending}
+          onSave={async (row) => { try { await addIncome.mutateAsync({ ...row, schooljaar_id: effectiveSj }); toast("Inkomst toegevoegd"); setShowAddIncome(false); } catch (e) { toast("Opslaan mislukt: " + (e instanceof Error ? e.message : "")); } }} />
+      )}
+    </>
+  );
+}
+
+function IncomeRow({ label, value, total, color, note }: { label: string; value: number; total: number; color: string; note?: string }) {
+  return (
+    <div>
+      <div className="flex justify-between" style={{ fontSize: 13, marginBottom: 4 }}>
+        <span>{label}{note && <span className="text-subtle"> · {note}</span>}</span>
+        <span className="num font-semibold">{EUR(value)}</span>
+      </div>
+      <div style={{ height: 6, background: "var(--bg-sunken)", borderRadius: 999, overflow: "hidden" }}>
+        <div style={{ width: (total ? (value / total) * 100 : 0) + "%", height: "100%", background: color }} />
+      </div>
+    </div>
+  );
+}
+
+function AddExpenseModal({ onClose, onSave, pending }: { onClose: () => void; onSave: (r: { date: string; category: string; description: string; amount: number; vendor: string }) => void; pending: boolean }) {
+  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [amount, setAmount] = useState("");
+  const [category, setCategory] = useState("");
+  const [description, setDescription] = useState("");
+  const [vendor, setVendor] = useState("");
+  const valid = date && amount && category && description;
+  return (
+    <Modal title="Nieuwe uitgave" sub="Voeg een uitgave toe aan de boekhouding" onClose={onClose}
+      footer={<ModalFooter onCancel={onClose} onSave={() => onSave({ date, category, description, amount: parseFloat(amount), vendor })} saving={pending} disabled={!valid} />}>
+      <div className="grid-3" style={{ gridTemplateColumns: "1fr 1fr" }}>
+        <Field label="Datum"><input className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} /></Field>
+        <Field label="Bedrag (€)"><input className="input" type="number" placeholder="0" value={amount} onChange={(e) => setAmount(e.target.value)} /></Field>
+      </div>
+      <Field label="Categorie"><Select value={category} onChange={(e) => setCategory(e.target.value)}><option value="" disabled>Kies categorie…</option>{CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}</Select></Field>
+      <Field label="Beschrijving"><input className="input" placeholder="Bijv. Werkboeken Niveau 2" value={description} onChange={(e) => setDescription(e.target.value)} /></Field>
+      <Field label="Leverancier"><input className="input" placeholder="Bijv. Dar Al-Kotob NL" value={vendor} onChange={(e) => setVendor(e.target.value)} /></Field>
+    </Modal>
+  );
+}
+
+function AddIncomeModal({ onClose, onSave, pending }: { onClose: () => void; onSave: (r: { date: string; source: string; description: string; amount: number }) => void; pending: boolean }) {
+  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [amount, setAmount] = useState("");
+  const [source, setSource] = useState("Sponsor");
+  const [description, setDescription] = useState("");
+  const valid = date && amount;
+  return (
+    <Modal title="Nieuwe inkomst" sub="Sponsor, donatie, subsidie of overige inkomsten" onClose={onClose}
+      footer={<ModalFooter onCancel={onClose} onSave={() => onSave({ date, source, description, amount: parseFloat(amount) })} saving={pending} disabled={!valid} />}>
+      <div className="grid-3" style={{ gridTemplateColumns: "1fr 1fr" }}>
+        <Field label="Datum"><input className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} /></Field>
+        <Field label="Bedrag (€)"><input className="input" type="number" placeholder="0" value={amount} onChange={(e) => setAmount(e.target.value)} /></Field>
+      </div>
+      <Field label="Bron"><Select value={source} onChange={(e) => setSource(e.target.value)}>{INCOME_SOURCES.map((s) => <option key={s} value={s}>{s}</option>)}</Select></Field>
+      <Field label="Omschrijving"><input className="input" placeholder="Bijv. Sponsoring lokale ondernemer" value={description} onChange={(e) => setDescription(e.target.value)} /></Field>
+    </Modal>
+  );
+}
