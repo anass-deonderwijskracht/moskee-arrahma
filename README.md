@@ -1,4 +1,4 @@
-# Moskee Arrahma — Weekendonderwijs Admin
+# Moskee Arrahma — Weekendonderwijs
 
 Web admin app for Moskee Arrahma's weekend Islamic education program — a fast,
 relational, Magister-style tool focused on **Qur'an registration**, **per-lesson
