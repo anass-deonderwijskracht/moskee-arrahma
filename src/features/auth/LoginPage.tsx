@@ -11,6 +11,7 @@ export function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   if (!loading && session) {
@@ -19,7 +20,7 @@ export function LoginPage() {
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    setError(null);
+    setError(null); setInfo(null);
     setBusy(true);
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     setBusy(false);
@@ -28,6 +29,18 @@ export function LoginPage() {
       return;
     }
     navigate(location.state?.from?.pathname || "/dashboard", { replace: true });
+  };
+
+  const onForgotPassword = async () => {
+    setError(null); setInfo(null);
+    if (!email) { setError("Vul eerst je e-mailadres in om een herstellink te ontvangen."); return; }
+    setBusy(true);
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: window.location.origin + "/wachtwoord-herstellen",
+    });
+    setBusy(false);
+    if (error) setError("Versturen mislukt: " + error.message);
+    else setInfo(`Herstellink verstuurd naar ${email}. Check je inbox (en spam-map).`);
   };
 
   return (
@@ -42,6 +55,7 @@ export function LoginPage() {
         </div>
         <form onSubmit={onSubmit}>
           {error && <div className="login-error">{error}</div>}
+          {info && <div className="login-error" style={{ background: "var(--success-soft)", color: "var(--success)", borderColor: "var(--success)" }}>{info}</div>}
           <div className="field">
             <label htmlFor="email">E-mailadres</label>
             <input
@@ -60,6 +74,11 @@ export function LoginPage() {
           <Btn kind="primary" size="lg" type="submit" disabled={busy}>
             {busy ? "Bezig met inloggen…" : "Inloggen"}
           </Btn>
+          <div style={{ display: "flex", justifyContent: "center", marginTop: 4 }}>
+            <button type="button" className="btn ghost sm" onClick={onForgotPassword} disabled={busy} style={{ fontSize: 12 }}>
+              Wachtwoord vergeten?
+            </button>
+          </div>
           <p className="text-xs text-subtle" style={{ margin: 0 }}>
             Toegang is alleen op uitnodiging. Neem contact op met het bestuur voor een account.
           </p>

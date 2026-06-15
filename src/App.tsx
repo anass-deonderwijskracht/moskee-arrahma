@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "@/features/auth/AuthProvider";
 import { ProtectedRoute } from "@/features/auth/ProtectedRoute";
 import { LoginPage } from "@/features/auth/LoginPage";
+import { ResetPasswordPage } from "@/features/auth/ResetPasswordPage";
 import { AppShell } from "@/components/chrome/AppShell";
 import { ToastProvider } from "@/components/chrome/Toast";
 
@@ -27,6 +28,7 @@ export function App() {
         <ToastProvider>
           <Routes>
             <Route path="/login" element={<LoginPage />} />
+            <Route path="/wachtwoord-herstellen" element={<ResetPasswordPage />} />
             <Route element={<ProtectedRoute />}>
               <Route element={<AppShell />}>
                 <Route path="/dashboard" element={<Dashboard />} />
