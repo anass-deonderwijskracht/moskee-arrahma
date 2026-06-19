@@ -8,7 +8,7 @@ import { useSession } from "@/features/auth/AuthProvider";
 import { useAppSettings } from "@/data/finance";
 import { useSchooljaren, useCurrentSchooljaar } from "@/data/schooljaren";
 import { useClasses } from "@/data/classes";
-import { useUsers, useCreateUser, useDeleteUser } from "@/data/users";
+import { useUsers, useCreateUser, useUpdateUser, useDeleteUser, type AppUser } from "@/data/users";
 import { useAuditLog, useSaveSettings, useSchooljaarCounts, useSchooljaarMutations } from "@/data/settings";
 import { useTableTools, SortTh, SelectTh, BulkBar } from "@/features/_shared/tableTools";
 
@@ -115,33 +115,61 @@ function UserManagement() {
   const { data: schooljaren } = useSchooljaren();
   const { data: currentYear } = useCurrentSchooljaar();
   const create = useCreateUser();
+  const update = useUpdateUser();
   const del = useDeleteUser();
   const [adding, setAdding] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<{ full_name: string; email: string; role: "admin" | "docent"; schooljaar_id: string; class_id: string }>(
     { full_name: "", email: "", role: "docent", schooljaar_id: "", class_id: "" },
   );
   // Classes of the chosen school year (selecting a class implicitly selects its year).
   const { data: classes } = useClasses(form.schooljaar_id || null);
 
-  const reset = () => setForm({ full_name: "", email: "", role: "docent", schooljaar_id: currentYear?.id ?? "", class_id: "" });
+  const openAdd = () => {
+    setEditingId(null);
+    setForm({ full_name: "", email: "", role: "docent", schooljaar_id: currentYear?.id ?? "", class_id: "" });
+    setAdding(true);
+  };
+  const openEdit = (u: AppUser) => {
+    setEditingId(u.id);
+    setForm({
+      full_name: u.full_name ?? "",
+      email: u.email ?? "",
+      role: u.role === "admin" ? "admin" : "docent",
+      schooljaar_id: u.class_schooljaar_id ?? currentYear?.id ?? "",
+      class_id: u.class_id ?? "",
+    });
+    setAdding(true);
+  };
+  const close = () => { setAdding(false); setEditingId(null); };
 
-  // Default the year to the current one once it has loaded.
+  // Default the year to the current one once it has loaded (add mode, no year yet).
   useEffect(() => {
     if (currentYear?.id) setForm((f) => (f.schooljaar_id ? f : { ...f, schooljaar_id: currentYear.id }));
   }, [currentYear]);
 
   const onSave = async () => {
     try {
-      const res = await create.mutateAsync({
-        full_name: form.full_name.trim(),
-        email: form.email.trim(),
-        role: form.role,
-        class_id: form.role === "docent" ? form.class_id || null : null,
-      });
-      toast(res.email_sent
-        ? `Uitnodiging verstuurd naar ${form.email} — de gebruiker stelt zelf een wachtwoord in.`
-        : `Account aangemaakt, maar de e-mail kon niet worden verstuurd. Gebruik "Wachtwoord vergeten" op het inlogscherm.`);
-      setAdding(false); reset();
+      if (editingId) {
+        await update.mutateAsync({
+          id: editingId,
+          full_name: form.full_name.trim(),
+          role: form.role,
+          class_id: form.role === "docent" ? form.class_id || null : null,
+        });
+        toast("Gebruiker bijgewerkt");
+      } else {
+        const res = await create.mutateAsync({
+          full_name: form.full_name.trim(),
+          email: form.email.trim(),
+          role: form.role,
+          class_id: form.role === "docent" ? form.class_id || null : null,
+        });
+        toast(res.email_sent
+          ? `Uitnodiging verstuurd naar ${form.email} — de gebruiker stelt zelf een wachtwoord in.`
+          : `Account aangemaakt, maar de e-mail kon niet worden verstuurd. Gebruik "Wachtwoord vergeten" op het inlogscherm.`);
+      }
+      close();
     } catch (e) {
       toast("Mislukt: " + (e instanceof Error ? e.message : ""));
     }
@@ -155,18 +183,19 @@ function UserManagement() {
     });
   };
 
-  const canSave = form.full_name.trim() && form.email.trim() && (form.role === "admin" || form.class_id);
+  const saving = create.isPending || update.isPending;
+  const canSave = !!(form.full_name.trim() && (editingId || form.email.trim()) && (form.role === "admin" || form.class_id));
 
   return (
     <div className="flex-col gap-4">
       <Card
         title={<><Icon name="user" size={14} /> Gebruikers</>}
         sub="Admins beheren alles; docenten zien en beheren alleen hun eigen klas."
-        action={<Btn size="sm" icon="plus" kind="primary" onClick={() => { reset(); setAdding(true); }}>Gebruiker toevoegen</Btn>}
+        action={<Btn size="sm" icon="plus" kind="primary" onClick={openAdd}>Gebruiker toevoegen</Btn>}
       >
         {isLoading ? <Loading /> : (
           <table className="table">
-            <thead><tr><th>Naam</th><th>E-mail</th><th>Rol</th><th>Klas</th><th></th></tr></thead>
+            <thead><tr><th>Naam</th><th>E-mail</th><th>Rol</th><th>Klas</th><th style={{ textAlign: "right" }}>Acties</th></tr></thead>
             <tbody>
               {(users ?? []).map((u) => (
                 <tr key={u.id}>
@@ -175,12 +204,13 @@ function UserManagement() {
                   <td>{u.role === "admin" ? <Badge kind="primary">Admin</Badge> : <Badge kind="info">Docent</Badge>}</td>
                   <td>{u.role === "docent" ? (u.class_code ?? <span className="text-subtle">— geen klas —</span>) : <span className="text-subtle">—</span>}</td>
                   <td>
-                    {session?.user.id !== u.id && (
-                      <button className="btn ghost sm" title="Verwijderen" disabled={del.isPending}
-                        onClick={() => onDelete(u.id, u.full_name ?? u.email ?? "")}>
-                        <Icon name="trash" size={12} />
-                      </button>
-                    )}
+                    <div className="flex gap-2 justify-end">
+                      <Btn size="sm" icon="edit" onClick={() => openEdit(u)}>Bewerken</Btn>
+                      {session?.user.id !== u.id && (
+                        <Btn size="sm" kind="danger" icon="trash" disabled={del.isPending}
+                          onClick={() => onDelete(u.id, u.full_name ?? u.email ?? "")}>Verwijderen</Btn>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -190,11 +220,16 @@ function UserManagement() {
       </Card>
 
       {adding && (
-        <Modal title="Gebruiker toevoegen" sub="De gebruiker krijgt een e-mail om zelf een wachtwoord in te stellen."
-          onClose={() => setAdding(false)}
-          footer={<ModalFooter onCancel={() => setAdding(false)} onSave={onSave} saving={create.isPending} disabled={!canSave} saveLabel="Uitnodigen" />}>
+        <Modal
+          title={editingId ? "Gebruiker bewerken" : "Gebruiker toevoegen"}
+          sub={editingId ? "Pas naam, rol of klas aan. Het e-mailadres ligt vast." : "De gebruiker krijgt een e-mail om zelf een wachtwoord in te stellen."}
+          onClose={close}
+          footer={<ModalFooter onCancel={close} onSave={onSave} saving={saving} disabled={!canSave} saveLabel={editingId ? "Opslaan" : "Uitnodigen"} />}>
           <Field label="Volledige naam"><input className="input" value={form.full_name} onChange={(e) => setForm((f) => ({ ...f, full_name: e.target.value }))} placeholder="Voornaam Achternaam" /></Field>
-          <Field label="E-mailadres"><input className="input" type="email" value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} placeholder="naam@voorbeeld.nl" /></Field>
+          <Field label="E-mailadres">
+            <input className="input" type="email" value={form.email} disabled={!!editingId}
+              onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} placeholder="naam@voorbeeld.nl" />
+          </Field>
           <Field label="Rol">
             <Select value={form.role} onChange={(e) => setForm((f) => ({ ...f, role: e.target.value as "admin" | "docent" }))}>
               <option value="docent">Docent — alleen eigen klas</option>

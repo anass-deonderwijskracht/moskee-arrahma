@@ -91,6 +91,35 @@ Deno.serve(async (req: Request) => {
     return json({ ok: true, user_id: created.user.id, email_sent: !mailErr, mail_error: mailErr?.message ?? null });
   }
 
+  // --- update ----------------------------------------------------------------
+  if (action === "update") {
+    const id = String(body.id ?? "");
+    const fullName = String(body.full_name ?? "").trim();
+    const role = String(body.role ?? "");
+    const classId: string | null = body.class_id ?? null;
+
+    if (!id) return json({ error: "Geen gebruiker opgegeven." }, 400);
+    if (!fullName) return json({ error: "Naam is verplicht." }, 400);
+    if (role !== "admin" && role !== "docent") return json({ error: "Ongeldige rol." }, 400);
+    if (role === "docent" && !classId) return json({ error: "Kies een klas voor de docent." }, 400);
+
+    const { error: profErr } = await service.from("profiles")
+      .update({ role, class_id: role === "docent" ? classId : null, full_name: fullName })
+      .eq("id", id);
+    if (profErr) return json({ error: "Bijwerken mislukt: " + profErr.message }, 500);
+
+    // Keep the auth metadata name in sync (fallback display name).
+    await service.auth.admin.updateUserById(id, { user_metadata: { full_name: fullName } });
+
+    await service.from("audit_log").insert({
+      action: `gebruiker bijgewerkt (${role})`,
+      object: fullName,
+      type: "note",
+      user_label: "Beheerder",
+    });
+    return json({ ok: true });
+  }
+
   // --- delete ----------------------------------------------------------------
   if (action === "delete") {
     const id = String(body.id ?? "");
