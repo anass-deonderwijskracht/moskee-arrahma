@@ -5,7 +5,10 @@ import { Loading, ErrorState } from "@/features/_shared/states";
 import { useToast } from "@/components/chrome/Toast";
 import { useTableTools, SortTh, SelectTh, SelectTd, SearchBox, BulkBar } from "@/features/_shared/tableTools";
 import { useSchooljaren, useCurrentSchooljaar } from "@/data/schooljaren";
-import { useFinance, useAppSettings, useAddExpense, useAddIncome, useDeleteExpenses, useDeleteIncomes, budgetForCategory, type Expense, type Income } from "@/data/finance";
+import { useFinance, useAddExpense, useAddIncome, useDeleteExpenses, useDeleteIncomes, budgetForCategory, type Expense, type Income } from "@/data/finance";
+import { useLeerlingen } from "@/data/leerlingen";
+import { useClasses } from "@/data/classes";
+import { useTuitionTiers, useFamilyLinks, resolveTuition } from "@/data/tuition";
 
 const CAT_KIND: Record<string, BadgeKind> = { Materialen: "accent", Salaris: "primary", Faciliteit: "info", Activiteit: "success", Catering: "warn", Software: "default" };
 const CATEGORIES = ["Materialen", "Salaris", "Faciliteit", "Activiteit", "Catering", "Software", "Overig"];
@@ -20,25 +23,51 @@ export function FinanceScreen() {
   const schooljaar = (schooljaren ?? []).find((s) => s.id === effectiveSj);
   const isCurrent = !!schooljaar?.is_current;
 
-  const { data: settings } = useAppSettings();
   const { data, isLoading, isError, error } = useFinance(effectiveSj);
   const addExpense = useAddExpense();
   const addIncome = useAddIncome();
   const [showAddExpense, setShowAddExpense] = useState(false);
   const [showAddIncome, setShowAddIncome] = useState(false);
 
-  const regRate = settings?.tuition_regulier_eur ?? 220;
-  const hifdhRate = settings?.tuition_hifdh_eur ?? 350;
   const expenses = data?.expenses ?? [];
   const incomes = data?.incomes ?? [];
   const budgets = data?.budgets ?? [];
   const reg = data?.regulier ?? { capacity: 0, enrolled: 0 };
   const hif = data?.hifdh ?? { capacity: 0, enrolled: 0 };
 
-  const tuitionBudget = reg.capacity * regRate + hif.capacity * hifdhRate;       // capaciteit × tarief
-  const tuitionEnrolled = reg.enrolled * regRate + hif.enrolled * hifdhRate;     // o.b.v. inschrijvingen
+  // Verschuldigd lesgeld per leerling (staffel per traject + gezinsrang, override wint).
+  const { data: leerlingen } = useLeerlingen(effectiveSj);
+  const { data: yearClasses } = useClasses(effectiveSj);
+  const { data: familyLinks } = useFamilyLinks();
+  const { data: tiers } = useTuitionTiers(effectiveSj);
+  const trackByClass = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const c of yearClasses ?? []) map.set(c.id, c.track);
+    return map;
+  }, [yearClasses]);
+  const tuition = useMemo(
+    () => resolveTuition(
+      (leerlingen ?? []).map((l) => ({ id: l.id, kind_id: l.kind_id, birth_year: l.kinderen?.birth_year ?? null, track: trackByClass.get(l.class_id) ?? null, override: l.lesgeld_override })),
+      familyLinks ?? [],
+      tiers ?? [],
+    ),
+    [leerlingen, trackByClass, familyLinks, tiers],
+  );
+  const tuitionByTrack = useMemo(() => {
+    const acc = { regulier: 0, hifdh: 0 } as Record<string, number>;
+    for (const l of leerlingen ?? []) {
+      const r = tuition.get(l.id);
+      const track = trackByClass.get(l.class_id);
+      if (r && track && track in acc) acc[track] += r.amount;
+    }
+    return acc;
+  }, [leerlingen, tuition, trackByClass]);
+  const tuitionReg = tuitionByTrack.regulier;
+  const tuitionHif = tuitionByTrack.hifdh;
+  const totalTuition = tuitionReg + tuitionHif;
+
   const manualIncome = incomes.reduce((a, i) => a + Number(i.amount), 0);
-  const totalIncome = tuitionBudget + manualIncome;
+  const totalIncome = totalTuition + manualIncome;
   const totalExpenses = expenses.reduce((a, x) => a + Number(x.amount), 0);
   const budgetTotal = budgets.reduce((a, c) => a + Number(c.planned), 0);
 
@@ -60,7 +89,7 @@ export function FinanceScreen() {
     <>
       <Section
         title="Financiën"
-        sub={`Schooljaar ${schooljaar?.name ?? ""}${isCurrent ? " (huidig)" : " · archief"} · begroting o.b.v. max. bezetting × tarief per traject`}
+        sub={`Schooljaar ${schooljaar?.name ?? ""}${isCurrent ? " (huidig)" : " · archief"} · begroting o.b.v. verschuldigd lesgeld per leerling (gestaffeld per gezin)`}
         actions={
           <>
             <Select value={effectiveSj ?? ""} onChange={(e) => setSjId(e.target.value)} style={{ width: "auto", minWidth: 150 }}>
@@ -74,7 +103,7 @@ export function FinanceScreen() {
         {isLoading ? <Loading /> : (
           <>
             <div className="stat-grid mb-6">
-              <Stat label="Begrote inkomsten" value={EUR(totalIncome)} sub={`collegegeld ${EUR(tuitionBudget)} + overig ${EUR(manualIncome)}`} icon="arrowUp" deltaKind="up" />
+              <Stat label="Begrote inkomsten" value={EUR(totalIncome)} sub={`collegegeld ${EUR(totalTuition)} + overig ${EUR(manualIncome)}`} icon="arrowUp" deltaKind="up" />
               <Stat label="Totale uitgaven" value={EUR(totalExpenses)} sub={budgetTotal ? Math.round((totalExpenses / budgetTotal) * 100) + "% van begroting" : ""} icon="arrowDown" />
               <Stat label="Saldo (begroot)" value={EUR(totalIncome - totalExpenses)} sub={isCurrent ? "prognose seizoen" : "definitief"} icon="coins" deltaKind={totalIncome > totalExpenses ? "up" : "down"} />
               <Stat label="Ontvangen collegegeld" value={EUR(data?.paidTuition ?? 0)} sub={`${data?.openCount ?? 0} openstaand`} icon="check" />
@@ -105,11 +134,11 @@ export function FinanceScreen() {
                 )}
               </Card>
 
-              <Card title="Inkomsten samenstelling" sub="Begroting o.b.v. tarief per traject + handmatige inkomsten"
+              <Card title="Inkomsten samenstelling" sub="Som van verschuldigd lesgeld per traject + handmatige inkomsten"
                 action={isCurrent ? <Btn size="sm" icon="plus" onClick={() => setShowAddIncome(true)}>Inkomst</Btn> : undefined}>
                 <div className="flex-col gap-3">
-                  <IncomeRow label={`Collegegeld regulier (${reg.capacity}× ${EUR(regRate)})`} value={reg.capacity * regRate} total={totalIncome} color="var(--primary)" note={`${reg.enrolled} nu ingeschreven`} />
-                  <IncomeRow label={`Collegegeld hifdh (${hif.capacity}× ${EUR(hifdhRate)})`} value={hif.capacity * hifdhRate} total={totalIncome} color="var(--accent)" note={`${hif.enrolled} nu ingeschreven`} />
+                  <IncomeRow label="Collegegeld regulier" value={tuitionReg} total={totalIncome} color="var(--primary)" note={`${reg.enrolled} leerlingen`} />
+                  <IncomeRow label="Collegegeld hifdh" value={tuitionHif} total={totalIncome} color="var(--accent)" note={`${hif.enrolled} leerlingen`} />
                   {Object.entries(incomeBySource).map(([src, val], i) => (
                     <IncomeRow key={src} label={src} value={val} total={totalIncome} color={["var(--info)", "var(--success)", "var(--warn)"][i % 3]} />
                   ))}
@@ -119,7 +148,7 @@ export function FinanceScreen() {
                   <span className="text-sm font-semibold">Totaal begroot</span>
                   <span className="text-lg font-semibold num">{EUR(totalIncome)}</span>
                 </div>
-                <div className="text-xs text-subtle mt-1">O.b.v. inschrijvingen: {EUR(tuitionEnrolled + manualIncome)}</div>
+                <div className="text-xs text-subtle mt-1">{(leerlingen ?? []).length} leerlingen · staffel in te stellen bij Instellingen → Schooljaren</div>
               </Card>
             </div>
 

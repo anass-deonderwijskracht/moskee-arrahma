@@ -9,6 +9,7 @@ import { useLeerlingen, useLeerlingMetrics, useCreateLeerling, useDeleteLeerling
 import { useClasses } from "@/data/classes";
 import { useKinderen } from "@/data/people";
 import { useSchooljaren, useCurrentSchooljaar } from "@/data/schooljaren";
+import { useTuitionTiers, useFamilyLinks, useSetLesgeldOverride, resolveTuition } from "@/data/tuition";
 
 const NIVEAUS = ["0 (beginner)", "0,5", "1", "1,5", "2"];
 
@@ -48,6 +49,25 @@ export function StudentsList() {
   }, [data]);
 
   const m = metrics ?? {};
+
+  // Verschuldigd lesgeld per leerling — staffel per traject + gezinsrang, override wint.
+  const { data: tiers } = useTuitionTiers(effectiveSj);
+  const { data: familyLinks } = useFamilyLinks();
+  const setOverride = useSetLesgeldOverride();
+  const trackByClass = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const c of yearClasses ?? []) map.set(c.id, c.track);
+    return map;
+  }, [yearClasses]);
+  const tuition = useMemo(
+    () => resolveTuition(
+      (data ?? []).map((l) => ({ id: l.id, kind_id: l.kind_id, birth_year: l.kinderen?.birth_year ?? null, track: trackByClass.get(l.class_id) ?? null, override: l.lesgeld_override })),
+      familyLinks ?? [],
+      tiers ?? [],
+    ),
+    [data, trackByClass, familyLinks, tiers],
+  );
+
   const classFiltered = useMemo(
     () => (data ?? []).filter((l) => !classFilter || l.class_id === classFilter),
     [data, classFilter],
@@ -66,12 +86,23 @@ export function StudentsList() {
       arabic: (l) => m[l.id]?.arabic_homework_pct,
       quran: (l) => m[l.id]?.quran_learned_pct,
       surahs: (l) => m[l.id]?.surahs_known,
+      lesgeld: (l) => tuition.get(l.id)?.amount ?? -1,
     },
     initialSort: { key: "name", dir: "asc" },
   });
   const rows = tools.view;
 
   if (isError) return <ErrorState error={error} />;
+
+  const onLesgeldBlur = (l: { id: string; lesgeld_override: number | null }, raw: string) => {
+    const v = raw.trim();
+    const num = v === "" ? null : parseFloat(v);
+    if (num !== null && Number.isNaN(num)) return;
+    const tierAmount = tuition.get(l.id)?.tierAmount ?? null;
+    // Leeg of gelijk aan het staffelbedrag → geen override (volg staffel).
+    const next = num === null || num === tierAmount ? null : num;
+    if (next !== l.lesgeld_override) setOverride.mutate({ leerlingId: l.id, value: next }, { onError: () => toast("Opslaan mislukt") });
+  };
 
   const onDelete = () => {
     const ids = tools.selectedIds;
@@ -122,6 +153,7 @@ export function StudentsList() {
                 <SortTh label="Arab. HW" k="arabic" sort={tools.sort} onSort={tools.toggleSort} />
                 <SortTh label="Qur'an" k="quran" sort={tools.sort} onSort={tools.toggleSort} />
                 <SortTh label="Surahs" k="surahs" sort={tools.sort} onSort={tools.toggleSort} />
+                <SortTh label="Verschuldigd" k="lesgeld" sort={tools.sort} onSort={tools.toggleSort} />
                 <th style={{ width: 1 }}></th>
               </tr>
             </thead>
@@ -149,6 +181,27 @@ export function StudentsList() {
                     <td><Badge kind={metricKind(mm?.arabic_homework_pct)}>{pct(mm?.arabic_homework_pct)}</Badge></td>
                     <td><Badge kind={metricKind(mm?.quran_learned_pct)}>{pct(mm?.quran_learned_pct)}</Badge></td>
                     <td className="num">{mm?.surahs_known ?? 0}</td>
+                    <td onClick={(e) => e.stopPropagation()}>
+                      {(() => {
+                        const res = tuition.get(l.id);
+                        return (
+                          <div className="flex items-center gap-1">
+                            <div style={{ position: "relative", width: 92 }}>
+                              <span style={{ position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)", color: "var(--fg-faint)", fontSize: 12 }}>€</span>
+                              <input
+                                key={`${l.id}:${res?.amount}:${res?.overridden}`}
+                                className="input" type="number"
+                                style={{ paddingLeft: 18, fontWeight: res?.overridden ? 600 : 400 }}
+                                defaultValue={res ? res.amount : ""}
+                                title={res?.overridden ? "Handmatig overschreven" : `Staffel: ${res?.rang ?? "?"}e kind`}
+                                onBlur={(e) => onLesgeldBlur(l, e.target.value)}
+                              />
+                            </div>
+                            {res?.overridden && <button className="btn ghost sm" title="Terug naar staffel" onClick={() => setOverride.mutate({ leerlingId: l.id, value: null })}><Icon name="x" size={11} /></button>}
+                          </div>
+                        );
+                      })()}
+                    </td>
                     <td><Icon name="chevronRight" size={14} /></td>
                   </tr>
                 );

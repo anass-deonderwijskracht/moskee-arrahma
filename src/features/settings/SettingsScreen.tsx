@@ -6,7 +6,8 @@ import { useToast } from "@/components/chrome/Toast";
 import { supabase } from "@/lib/supabase";
 import { useSession } from "@/features/auth/AuthProvider";
 import { useAppSettings } from "@/data/finance";
-import { useSchooljaren, useCurrentSchooljaar } from "@/data/schooljaren";
+import { useSchooljaren, useCurrentSchooljaar, type Schooljaar } from "@/data/schooljaren";
+import { useTuitionTiers, useTuitionTierMutations, TRACKS, type Track } from "@/data/tuition";
 import { useClasses } from "@/data/classes";
 import { useUsers, useCreateUser, useUpdateUser, useDeleteUser, type AppUser } from "@/data/users";
 import { useAuditLog, useSaveSettings, useSchooljaarCounts, useSchooljaarMutations } from "@/data/settings";
@@ -89,18 +90,13 @@ function GeneralSettings() {
         </div>
         <div className="flex justify-end mt-3"><Btn kind="primary" icon="check" disabled={save.isPending} onClick={onSave}>Opslaan</Btn></div>
       </Card>
-      <Card title="Collegegeld" sub="Jaarlijks vastgesteld tarief per traject — de begroting rekent met max. bezetting × tarief">
-        <div className="grid-3">
-          <div className="field"><label>Tarief Regulier (€/jaar)</label><input className="input" type="number" value={form.tuition_regulier_eur} onChange={(e) => setForm((f) => ({ ...f, tuition_regulier_eur: parseInt(e.target.value) || 0 }))} /></div>
-          <div className="field"><label>Tarief Hifdh (€/jaar)</label><input className="input" type="number" value={form.tuition_hifdh_eur} onChange={(e) => setForm((f) => ({ ...f, tuition_hifdh_eur: parseInt(e.target.value) || 0 }))} /></div>
-        </div>
-        <div className="grid-3 mt-3">
+      <Card title="Betaaltermijnen" sub="Het lesgeld zelf stel je per schooljaar in bij Instellingen → Schooljaren (gestaffeld per kind).">
+        <div className="grid-3" style={{ gridTemplateColumns: "1fr 1fr" }}>
           <div className="field"><label>Termijnen</label>
             <Select value={String(form.terms)} onChange={(e) => setForm((f) => ({ ...f, terms: parseInt(e.target.value) }))}>
               <option value="1">1 (jaarlijks)</option><option value="3">3 (per kwartaal)</option><option value="10">10 (maandelijks)</option>
             </Select>
           </div>
-          <div className="field"><label>Korting broer/zus</label><input className="input" value={form.sibling_discount} onChange={(e) => setForm((f) => ({ ...f, sibling_discount: e.target.value }))} /></div>
         </div>
         <div className="flex justify-end mt-3"><Btn kind="primary" icon="check" disabled={save.isPending} onClick={onSave}>Opslaan</Btn></div>
       </Card>
@@ -341,6 +337,8 @@ function SchooljarenSettings() {
         </table>
       </Card>
 
+      <TuitionTierSettings schooljaren={schooljaren ?? []} />
+
       {adding && (
         <Card title="Nieuw schooljaar" action={<button className="btn ghost sm" onClick={() => setAdding(false)}><Icon name="x" size={14} /></button>}>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 16 }}>
@@ -353,6 +351,60 @@ function SchooljarenSettings() {
         </Card>
       )}
     </div>
+  );
+}
+
+const TRACK_LABEL: Record<string, string> = { regulier: "Regulier", hifdh: "Hifdh" };
+
+function TuitionTierSettings({ schooljaren }: { schooljaren: Schooljaar[] }) {
+  const toast = useToast();
+  const { data: current } = useCurrentSchooljaar();
+  const [sjId, setSjId] = useState<string | null>(null);
+  const effective = sjId ?? current?.id ?? schooljaren[0]?.id ?? null;
+  const { data: tiers } = useTuitionTiers(effective);
+  const { addTier, setBedrag, removeTier } = useTuitionTierMutations(effective);
+
+  const listFor = (track: string) => (tiers ?? []).filter((t) => t.track === track).sort((a, b) => a.rang - b.rang);
+  const onAdd = (track: Track) => {
+    const existing = listFor(track);
+    const last = existing[existing.length - 1];
+    addTier.mutate({ track, rang: (last?.rang ?? 0) + 1, bedrag: last ? Number(last.bedrag) : 0 }, { onError: () => toast("Toevoegen mislukt") });
+  };
+
+  return (
+    <Card title={<><Icon name="coins" size={14} /> Lesgeld-staffel</>}
+      sub="Per schooljaar en traject — 1e kind, 2e kind, … Het bedrag is later per leerling te overschrijven."
+      action={
+        <Select value={effective ?? ""} onChange={(e) => setSjId(e.target.value)} style={{ width: 170 }}>
+          {schooljaren.map((s) => <option key={s.id} value={s.id}>Schooljaar {s.name}{s.is_current ? " (huidig)" : ""}</option>)}
+        </Select>
+      }>
+      <div className="grid-2" style={{ gap: 24 }}>
+        {TRACKS.map((track) => {
+          const list = listFor(track);
+          return (
+            <div key={track}>
+              <div className="font-semibold mb-2">{TRACK_LABEL[track]}</div>
+              <div className="flex-col gap-2">
+                {list.map((t) => (
+                  <div key={t.id} className="flex items-center gap-2">
+                    <span className="text-sm text-subtle" style={{ width: 70 }}>{t.rang}e kind</span>
+                    <div style={{ position: "relative", width: 130 }}>
+                      <span style={{ position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)", color: "var(--fg-faint)" }}>€</span>
+                      <input className="input" style={{ paddingLeft: 20 }} type="number" defaultValue={Number(t.bedrag)}
+                        onBlur={(e) => { const v = parseFloat(e.target.value) || 0; if (v !== Number(t.bedrag)) setBedrag.mutate({ id: t.id, bedrag: v }); }} />
+                    </div>
+                    <button className="btn ghost sm" title="Trede verwijderen" onClick={() => removeTier.mutate(t.id)}><Icon name="trash" size={12} /></button>
+                  </div>
+                ))}
+                {list.length === 0 && <div className="text-xs text-subtle">Nog geen treden ingesteld.</div>}
+                <div><Btn size="sm" kind="ghost" icon="plus" onClick={() => onAdd(track)}>Trede toevoegen</Btn></div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </Card>
   );
 }
 

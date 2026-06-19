@@ -65,6 +65,12 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["schooljaren"]["Row"]>;
         Relationships: [];
       };
+      tuition_tiers: {
+        Row: { id: string; schooljaar_id: string; track: string; rang: number; bedrag: number };
+        Insert: { schooljaar_id: string; track: string; rang: number } & Partial<Database["public"]["Tables"]["tuition_tiers"]["Row"]>;
+        Update: Partial<Database["public"]["Tables"]["tuition_tiers"]["Row"]>;
+        Relationships: [];
+      };
       teachers: {
         Row: {
           id: string; name: string; short: string | null; email: string | null;
@@ -122,6 +128,7 @@ export interface Database {
           leerlingnummer: string | null; niveau: string | null; joined: string | null;
           final_grade: string | null; notes_end_of_year: string | null;
           hist_attendance_pct: number | null; hist_surahs_known: number | null;
+          lesgeld_override: number | null;
         } & Timestamps;
         Insert: { kind_id: string; class_id: string; schooljaar_id: string } & Partial<Database["public"]["Tables"]["leerlingen"]["Row"]>;
         Update: Partial<Database["public"]["Tables"]["leerlingen"]["Row"]>;
