@@ -22,6 +22,7 @@ import { EnrollmentsScreen } from "@/features/enrollments/EnrollmentsScreen";
 import { FinanceScreen } from "@/features/finance/FinanceScreen";
 import { PlanningScreen } from "@/features/planning/PlanningScreen";
 import { SettingsScreen } from "@/features/settings/SettingsScreen";
+import { AdminToetsen } from "@/features/admin-tests/AdminToetsen";
 
 export function App() {
   return (
@@ -48,6 +49,7 @@ export function App() {
                   <Route path="/students" element={<StudentsList />} />
                   <Route path="/classes" element={<ClassesList />} />
                   <Route path="/enrollments" element={<EnrollmentsScreen />} />
+                  <Route path="/admin-toetsen" element={<AdminToetsen />} />
                   <Route path="/finance" element={<FinanceScreen />} />
                   <Route path="/settings" element={<SettingsScreen />} />
                 </Route>

@@ -14,8 +14,10 @@ import { useSurahs } from "@/data/classDetail";
 import { useTeachers } from "@/data/people";
 import { LesAdministratie } from "@/features/class-admin/LesAdministratie";
 import { QuranAdministratie } from "@/features/class-admin/QuranAdministratie";
+import { ToetsenTab } from "@/features/class-admin/ToetsenTab";
+import { BeoordelingenTab } from "@/features/class-admin/BeoordelingenTab";
 
-type Tab = "overview" | "attendance" | "quranadmin" | "lessons" | "students" | "quran";
+type Tab = "overview" | "attendance" | "quranadmin" | "lessons" | "students" | "quran" | "toetsen" | "beoordelingen";
 const currentYear = new Date().getFullYear();
 
 export function ClassDetail() {
@@ -64,6 +66,8 @@ export function ClassDetail() {
     { value: "lessons", label: "Lessen" },
     { value: "students", label: `Leerlingen (${leerlingen.length})` },
     { value: "quran", label: "Qur'an-overzicht" },
+    { value: "toetsen", label: "Toetsen" },
+    { value: "beoordelingen", label: "Beoordelingen" },
   ];
 
   return (
@@ -89,6 +93,8 @@ export function ClassDetail() {
       {tab === "lessons" && <ClassLessons classId={c.id} cls={c} lessons={lessons} leerlingen={leerlingen} onOpen={(lid) => { setLessonId(lid); setTab("attendance"); }} />}
       {tab === "students" && <ClassStudents leerlingen={leerlingen} />}
       {tab === "quran" && <ClassQuranMatrix leerlingen={leerlingen} />}
+      {tab === "toetsen" && <ToetsenTab classId={c.id} />}
+      {tab === "beoordelingen" && <BeoordelingenTab classId={c.id} leerlingen={leerlingen} />}
     </Section>
   );
 }

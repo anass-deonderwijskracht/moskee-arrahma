@@ -57,7 +57,7 @@ export function Roostermatrix() {
   const [edits, setEdits] = useState<Record<string, CellState>>({});
   const [dirty, setDirty] = useState<Set<string>>(new Set());
   const [flashWeek, setFlashWeek] = useState<number | null>(null);
-  const [addLesson, setAddLesson] = useState<{ date: string; week_nr: string; topic: string; type: string } | null>(null);
+  const [addLesson, setAddLesson] = useState<{ date: string; topic: string; type: string } | null>(null);
   const rowRefs = useRef<Record<number, HTMLTableRowElement | null>>({});
 
   // Select all classes by default once they load.
@@ -151,11 +151,18 @@ export function Roostermatrix() {
   };
 
   const selectedCount = classes.filter((c) => selected.has(c.id)).length;
+
+  // Lesweeknummer afgeleid van de eerste les: vroegste lesdatum = week 1, elke 7 dagen +1.
+  const weekNrForDate = (date: string): number => {
+    if (!weeks.length || !date) return 1;
+    const firstDate = weeks.reduce((min, w) => (w.date < min ? w.date : min), weeks[0].date);
+    return Math.round((new Date(date).getTime() - new Date(firstDate).getTime()) / (7 * 864e5)) + 1;
+  };
+
   const openAddLesson = () => {
-    const nextWeek = weeks.length ? Math.max(...weeks.map((w) => w.week_nr)) + 1 : 35;
     const lastDate = weeks.length ? weeks[weeks.length - 1].date : null;
     const suggest = lastDate ? new Date(new Date(lastDate).getTime() + 7 * 864e5) : new Date();
-    setAddLesson({ date: suggest.toISOString().slice(0, 10), week_nr: String(nextWeek), topic: "Wekelijkse les", type: "les" });
+    setAddLesson({ date: suggest.toISOString().slice(0, 10), topic: "Wekelijkse les", type: "les" });
   };
   // "+"-knop onder de onderste les: dupliceer voor elke geselecteerde klas zijn laatste les (+7 dagen, volgende weeknr).
   const addNextWeek = async () => {
@@ -170,8 +177,8 @@ export function Roostermatrix() {
       return own.length ? own.reduce((b, l) => (l.week_nr! > b.week_nr! ? l : b)).id : null;
     }).filter((id): id is string => id != null);
     if (!lessonIds.length) { toast("Geen les om te dupliceren"); return; }
-    const newWeek = lastWeek.week_nr + 1;
     const newDate = new Date(new Date(lastWeek.date).getTime() + 7 * 864e5).toISOString().slice(0, 10);
+    const newWeek = weekNrForDate(newDate);
     try {
       const n = await duplicate.mutateAsync({ lessonIds, date: newDate, week_nr: newWeek });
       toast(`Lesweek ${newWeek} toegevoegd voor ${n} klas(sen)`);
@@ -184,7 +191,7 @@ export function Roostermatrix() {
     try {
       const n = await createLessons.mutateAsync({
         classIds, date: addLesson.date,
-        week_nr: addLesson.week_nr.trim() === "" ? null : (parseInt(addLesson.week_nr) || null),
+        week_nr: weekNrForDate(addLesson.date),
         topic: addLesson.topic.trim() || "Wekelijkse les", type: addLesson.type,
       });
       toast(`Les aangemaakt voor ${n} klas(sen)`);
@@ -347,7 +354,7 @@ export function Roostermatrix() {
           footer={<ModalFooter onCancel={() => setAddLesson(null)} onSave={submitAddLesson} saving={createLessons.isPending} saveLabel="Les aanmaken" disabled={!addLesson.date} />}>
           <div className="flex gap-3">
             <Field label="Datum"><input className="input" type="date" value={addLesson.date} onChange={(e) => setAddLesson((s) => s && { ...s, date: e.target.value })} /></Field>
-            <Field label="Lesweek (nr.)"><input className="input" type="number" value={addLesson.week_nr} onChange={(e) => setAddLesson((s) => s && { ...s, week_nr: e.target.value })} placeholder="bv. 42" /></Field>
+            <Field label="Lesweek"><input className="input" readOnly value={`Week ${weekNrForDate(addLesson.date)}`} title="Automatisch berekend vanaf de eerste les" style={{ background: "var(--bg-sunken)" }} /></Field>
           </div>
           <Field label="Type">
             <Select value={addLesson.type} onChange={(e) => setAddLesson((s) => s && { ...s, type: e.target.value })}>

@@ -27,6 +27,7 @@ export function Sidebar({ collapsed, setCollapsed }: { collapsed: boolean; setCo
         { to: "/classes", label: "Klassen", icon: "layoutGrid", countKey: "classes" },
         { group: "Administratie" },
         { to: "/enrollments", label: "Inschrijvingen", icon: "inbox", countKey: "enrollments" },
+        { to: "/admin-toetsen", label: "Toetsen", icon: "edit" },
         { to: "/finance", label: "Financiën", icon: "coins" },
         { group: "Systeem" },
         { to: "/settings", label: "Instellingen", icon: "settings" },

@@ -9,6 +9,7 @@ import { Loading, ErrorState } from "@/features/_shared/states";
 import { useToast } from "@/components/chrome/Toast";
 import { useLeerlingDetail, useAddPayment } from "@/data/leerlingDetail";
 import { useSurahs, dateNL } from "@/data/classDetail";
+import { useLeerlingReports, type LeerlingReport } from "@/data/rapporten";
 
 type Tab = "quran" | "attendance" | "tests" | "notes" | "info";
 const currentYear = new Date().getFullYear();
@@ -76,7 +77,7 @@ export function LeerlingDetail() {
 
       {tab === "quran" && <QuranTab progress={data.progress} assignments={data.assignments} />}
       {tab === "attendance" && <AttendanceTab leerlingId={l.id} attendancePct={m?.attendance_pct ?? null} firstName={kinderen?.first_name ?? ""} />}
-      {tab === "tests" && <Card title="Toetsen" sub="Toetsmomenten en beoordelingen"><div className="empty">Nog geen toetsen geregistreerd voor deze leerling.</div></Card>}
+      {tab === "tests" && <LeerlingToetsen leerlingId={l.id} />}
       {tab === "notes" && <NotesTab notes={data.notes} />}
       {tab === "info" && <InfoTab detail={data} age={age} />}
     </Section>
@@ -214,6 +215,46 @@ function AttendanceTab({ leerlingId, attendancePct, firstName }: { leerlingId: s
           )}
         </Card>
       </div>
+    </div>
+  );
+}
+
+function LeerlingToetsen({ leerlingId }: { leerlingId: string }) {
+  const { data, isLoading } = useLeerlingReports(leerlingId);
+  if (isLoading) return <Loading label="Beoordelingen laden…" />;
+  const filled = (r: LeerlingReport) =>
+    r.assessment?.quran || r.assessment?.gedrag || r.assessment?.inzet || r.assessment?.opmerking || r.tests.some((t) => t.value);
+  const any = (data ?? []).some(filled);
+  if (!any) return <Card title="Toetsen" sub="Toetsmomenten en beoordelingen"><div className="empty">Nog geen beoordelingen ingevuld voor deze leerling.</div></Card>;
+
+  return (
+    <div className="flex-col gap-4">
+      {(data ?? []).filter(filled).map((r) => (
+        <Card key={r.period.id} title={r.period.name} sub="Beoordelingen">
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 24, fontSize: 13, marginBottom: r.tests.length ? 16 : 0 }}>
+            {([["Quran", r.assessment?.quran], ["Gedrag", r.assessment?.gedrag], ["Inzet", r.assessment?.inzet]] as const).map(([k, v]) => (
+              <div key={k}><div className="text-xs text-subtle mb-1">{k}</div><div className="font-semibold">{v || "—"}</div></div>
+            ))}
+            {r.assessment?.opmerking && (
+              <div style={{ gridColumn: "1 / -1" }}><div className="text-xs text-subtle mb-1">Opmerking</div><div>{r.assessment.opmerking}</div></div>
+            )}
+          </div>
+          {r.tests.length > 0 && (
+            <table className="table">
+              <thead><tr><th>Toets</th><th>Type</th><th>Resultaat</th></tr></thead>
+              <tbody>
+                {r.tests.map((t) => (
+                  <tr key={t.test.id}>
+                    <td className="font-semibold">{t.test.name}</td>
+                    <td className="text-sm">{t.test.grade_type === "cijfer" ? "Cijfer (1–10)" : "Schaal"}</td>
+                    <td className="num">{t.value || "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </Card>
+      ))}
     </div>
   );
 }
