@@ -7,6 +7,7 @@ import {
   SCHAAL, useReportPeriods, useReportGrades, useSaveReportGrades,
   type AssessmentUpsert, type GradeUpsert,
 } from "@/data/rapporten";
+import { RapportGenerator } from "@/features/class-admin/RapportGenerator";
 
 interface AssessRow { quran: string; gedrag: string; inzet: string; opmerking: string }
 const EMPTY: AssessRow = { quran: "", gedrag: "", inzet: "", opmerking: "" };
@@ -23,6 +24,7 @@ function SchaalSelect({ value, onChange }: { value: string; onChange: (v: string
 export function BeoordelingenTab({ classId, leerlingen }: { classId: string; leerlingen: ClassLeerling[] }) {
   const { data: periods, isLoading: periodsLoading } = useReportPeriods();
   const [periodId, setPeriodId] = useState<string>("");
+  const [generating, setGenerating] = useState(false);
 
   useEffect(() => {
     if (periods?.length && !periods.some((p) => p.id === periodId)) setPeriodId(periods[0].id);
@@ -33,11 +35,19 @@ export function BeoordelingenTab({ classId, leerlingen }: { classId: string; lee
   if (!leerlingen.length) return <Card><div className="empty">Deze klas heeft nog geen leerlingen.</div></Card>;
 
   const periodOptions: Option[] = periods.map((p) => ({ value: p.id, label: p.name }));
+  const periodName = periods.find((p) => p.id === periodId)?.name ?? "Rapport";
 
   return (
     <div className="flex-col gap-4">
-      <Pills value={periodId} onChange={setPeriodId} options={periodOptions} />
+      <div className="flex items-center justify-between" style={{ flexWrap: "wrap", gap: 12 }}>
+        <Pills value={periodId} onChange={setPeriodId} options={periodOptions} />
+        <Btn kind="primary" icon="download" onClick={() => setGenerating(true)} disabled={!periodId}>PDF genereren</Btn>
+      </div>
       {periodId && <GradeGrid key={periodId} classId={classId} reportPeriodId={periodId} leerlingen={leerlingen} />}
+      {generating && periodId && (
+        <RapportGenerator classId={classId} reportPeriodId={periodId} periodName={periodName}
+          leerlingen={leerlingen} onClose={() => setGenerating(false)} />
+      )}
     </div>
   );
 }

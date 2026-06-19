@@ -216,6 +216,24 @@ export function useSaveReportGrades() {
   });
 }
 
+/** Aantal keer 'te laat' (status L) per leerling, voor het rapport. */
+export function useClassLateCounts(leerlingIds: string[], enabled: boolean) {
+  const key = leerlingIds.slice().sort().join(",");
+  return useQuery({
+    queryKey: ["class-late-counts", key],
+    enabled: enabled && leerlingIds.length > 0,
+    queryFn: async (): Promise<Record<string, number>> => {
+      const { data, error } = await supabase
+        .from("attendance_records").select("leerling_id,status").in("leerling_id", leerlingIds);
+      if (error) throw error;
+      const m: Record<string, number> = {};
+      for (const r of (data as { leerling_id: string; status: string | null }[]) ?? [])
+        if (r.status === "L") m[r.leerling_id] = (m[r.leerling_id] ?? 0) + 1;
+      return m;
+    },
+  });
+}
+
 // ---- leerling read-only overzicht ------------------------------------------
 
 export interface LeerlingReport {

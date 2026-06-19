@@ -1,0 +1,133 @@
+/* ===========================================================================
+   Rapport (PDF) — preview-overlay + A4-template + printstijl.
+   De on-screen preview is tevens de template; "Opslaan als PDF" gebruikt de
+   browser-printdialoog. @media print verbergt de hele app behalve het rapport.
+   =========================================================================== */
+
+.rapport-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: #525659; /* pdf-viewer-grijs */
+  overflow: auto;
+}
+
+.rapport-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 20px;
+  background: var(--bg-elev);
+  border-bottom: 1px solid var(--border);
+}
+.rapport-toolbar .r-toolbar-info { font-size: 13px; color: var(--fg-muted); }
+
+.rapport-pages {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+}
+
+.rapport-page {
+  width: 210mm;
+  min-height: 297mm;
+  box-sizing: border-box;
+  padding: 20mm 18mm;
+  background: #fff;
+  color: #1a1a1a;
+  box-shadow: 0 2px 14px rgba(0, 0, 0, 0.35);
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  display: flex;
+  flex-direction: column;
+}
+
+.r-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  border-bottom: 2px solid var(--primary, #1f7a3d);
+  padding-bottom: 12px;
+}
+.r-brand-name { font-weight: 700; font-size: 15px; letter-spacing: 0.02em; }
+.r-brand-sub { font-size: 11px; color: #666; margin-top: 2px; }
+.r-title { text-align: right; }
+.r-title-main { font-size: 22px; font-weight: 700; color: var(--primary, #1f7a3d); line-height: 1.1; }
+.r-title-sub { font-size: 12px; color: #444; margin-top: 3px; }
+
+.r-student { margin-top: 22px; }
+.r-name { font-size: 26px; font-weight: 700; }
+.r-student-sub { font-size: 13px; color: #555; margin-top: 3px; }
+
+.r-section-title {
+  margin-top: 24px;
+  margin-bottom: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--primary, #1f7a3d);
+}
+
+.r-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.r-table th, .r-table td { text-align: left; padding: 9px 10px; border-bottom: 1px solid #e6e6e6; }
+.r-table th { font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; color: #888; font-weight: 600; }
+.r-table td.r-result { font-weight: 600; text-transform: capitalize; text-align: right; }
+.r-table tr:last-child td { border-bottom: none; }
+
+.r-note {
+  font-size: 13px;
+  line-height: 1.55;
+  padding: 12px 14px;
+  background: #f6f6f4;
+  border-radius: 8px;
+  border: 1px solid #e6e6e6;
+  white-space: pre-wrap;
+}
+
+.r-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 12px; }
+.r-kpi { border: 1px solid #e6e6e6; border-radius: 8px; padding: 12px 14px; }
+.r-kpi-val { font-size: 22px; font-weight: 700; color: var(--primary, #1f7a3d); font-variant-numeric: tabular-nums; }
+.r-kpi-lbl { font-size: 11px; color: #666; margin-top: 2px; }
+
+.r-footer {
+  margin-top: auto;
+  padding-top: 28px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  font-size: 12px;
+  color: #555;
+}
+.r-sign-line { width: 190px; border-top: 1px solid #999; padding-top: 4px; text-align: center; }
+
+.r-empty-hint { font-size: 12px; color: #999; font-style: italic; }
+
+@media print {
+  body { background: #fff !important; }
+  body * { visibility: hidden !important; }
+  .rapport-overlay, .rapport-overlay * { visibility: visible !important; }
+  .rapport-overlay { position: absolute; inset: 0; background: #fff !important; overflow: visible; }
+  .rapport-toolbar { display: none !important; }
+  .rapport-pages { padding: 0; gap: 0; display: block; }
+  .rapport-page {
+    width: auto;
+    min-height: auto;
+    box-shadow: none;
+    margin: 0;
+    padding: 16mm 16mm;
+    page-break-after: always;
+  }
+  .rapport-page:last-child { page-break-after: auto; }
+  .r-header, .r-title-main, .r-kpi-val, .r-section-title {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
+
+@page { size: A4; margin: 0; }
