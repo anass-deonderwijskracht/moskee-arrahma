@@ -112,16 +112,23 @@ function UserManagement() {
   const toast = useToast();
   const { session } = useSession();
   const { data: users, isLoading } = useUsers();
+  const { data: schooljaren } = useSchooljaren();
   const { data: currentYear } = useCurrentSchooljaar();
-  const { data: classes } = useClasses(currentYear?.id ?? null);
   const create = useCreateUser();
   const del = useDeleteUser();
   const [adding, setAdding] = useState(false);
-  const [form, setForm] = useState<{ full_name: string; email: string; role: "admin" | "docent"; class_id: string }>(
-    { full_name: "", email: "", role: "docent", class_id: "" },
+  const [form, setForm] = useState<{ full_name: string; email: string; role: "admin" | "docent"; schooljaar_id: string; class_id: string }>(
+    { full_name: "", email: "", role: "docent", schooljaar_id: "", class_id: "" },
   );
+  // Classes of the chosen school year (selecting a class implicitly selects its year).
+  const { data: classes } = useClasses(form.schooljaar_id || null);
 
-  const reset = () => setForm({ full_name: "", email: "", role: "docent", class_id: "" });
+  const reset = () => setForm({ full_name: "", email: "", role: "docent", schooljaar_id: currentYear?.id ?? "", class_id: "" });
+
+  // Default the year to the current one once it has loaded.
+  useEffect(() => {
+    if (currentYear?.id) setForm((f) => (f.schooljaar_id ? f : { ...f, schooljaar_id: currentYear.id }));
+  }, [currentYear]);
 
   const onSave = async () => {
     try {
@@ -195,12 +202,21 @@ function UserManagement() {
             </Select>
           </Field>
           {form.role === "docent" && (
-            <Field label={`Klas${currentYear ? ` (${currentYear.name})` : ""}`}>
-              <Select value={form.class_id} onChange={(e) => setForm((f) => ({ ...f, class_id: e.target.value }))}>
-                <option value="">— Kies een klas —</option>
-                {(classes ?? []).filter((c) => !currentYear || c.schooljaar_id === currentYear.id).map((c) => <option key={c.id} value={c.id}>{c.code}</option>)}
-              </Select>
-            </Field>
+            <>
+              <Field label="Schooljaar">
+                <Select value={form.schooljaar_id} onChange={(e) => setForm((f) => ({ ...f, schooljaar_id: e.target.value, class_id: "" }))}>
+                  {(schooljaren ?? []).map((s) => (
+                    <option key={s.id} value={s.id}>{s.name}{s.is_current ? " (huidig)" : ""}</option>
+                  ))}
+                </Select>
+              </Field>
+              <Field label="Klas">
+                <Select value={form.class_id} onChange={(e) => setForm((f) => ({ ...f, class_id: e.target.value }))}>
+                  <option value="">— Kies een klas —</option>
+                  {(classes ?? []).filter((c) => c.schooljaar_id === form.schooljaar_id).map((c) => <option key={c.id} value={c.id}>{c.code}</option>)}
+                </Select>
+              </Field>
+            </>
           )}
         </Modal>
       )}

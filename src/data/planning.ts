@@ -74,6 +74,31 @@ export function useCreateLessons(schooljaarId: string | null) {
   });
 }
 
+/** Duplicate existing lessons (one per class) onto a new date/week — copies every field (docenten, type, topic, …). */
+export function useDuplicateLessons(schooljaarId: string | null) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { lessonIds: string[]; date: string; week_nr: number | null }) => {
+      if (input.lessonIds.length === 0) return 0;
+      const { data: src, error: sErr } = await supabase
+        .from("lessons")
+        .select("class_id, type, teacher_id, quran_teacher_id, teacher_na, quran_na, topic, location")
+        .in("id", input.lessonIds);
+      if (sErr) throw sErr;
+      const rows = ((src as Record<string, unknown>[]) ?? []).map((l) => ({ ...l, date: input.date, week_nr: input.week_nr }));
+      if (rows.length === 0) return 0;
+      const { error } = await supabase.from("lessons").insert(rows as never);
+      if (error) throw error;
+      await supabase.from("audit_log").insert({ action: "lesweek gedupliceerd", object: `${rows.length} klas(sen)${input.week_nr != null ? ` · week ${input.week_nr}` : ""}`, type: "plan", user_label: "Beheerder" } as never);
+      return rows.length;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["planning-matrix", schooljaarId] });
+      qc.invalidateQueries({ queryKey: ["lessons"] });
+    },
+  });
+}
+
 export interface LessonPatch { id: string; teacher_id: string | null; quran_teacher_id: string | null; type: string; teacher_na: boolean; quran_na: boolean }
 
 export function useSaveLessons(schooljaarId: string | null) {

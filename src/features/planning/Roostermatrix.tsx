@@ -3,7 +3,7 @@ import { Card, Btn, Badge, Select } from "@/components/ui";
 import { Modal, Field, ModalFooter } from "@/components/ui/Modal";
 import { Loading, ErrorState } from "@/features/_shared/states";
 import { useToast } from "@/components/chrome/Toast";
-import { usePlanningMatrix, useSaveLessons, useCreateLessons, type LessonPatch } from "@/data/planning";
+import { usePlanningMatrix, useSaveLessons, useCreateLessons, useDuplicateLessons, type LessonPatch } from "@/data/planning";
 import { useTeachers } from "@/data/people";
 import { useSchooljaren, useCurrentSchooljaar } from "@/data/schooljaren";
 
@@ -45,6 +45,7 @@ export function Roostermatrix() {
   const { data: teachers } = useTeachers();
   const save = useSaveLessons(effectiveSj);
   const createLessons = useCreateLessons(effectiveSj);
+  const duplicate = useDuplicateLessons(effectiveSj);
 
   const classes = data?.classes ?? [];
   const weeks = data?.weeks ?? [];
@@ -156,6 +157,27 @@ export function Roostermatrix() {
     const suggest = lastDate ? new Date(new Date(lastDate).getTime() + 7 * 864e5) : new Date();
     setAddLesson({ date: suggest.toISOString().slice(0, 10), week_nr: String(nextWeek), topic: "Wekelijkse les", type: "les" });
   };
+  // "+"-knop onder de onderste les: dupliceer voor elke geselecteerde klas zijn laatste les (+7 dagen, volgende weeknr).
+  const addNextWeek = async () => {
+    if (!weeks.length) return;
+    const lastWeek = weeks[weeks.length - 1];
+    const selIds = classes.filter((c) => selected.has(c.id)).map((c) => c.id);
+    const lessonIds = selIds.map((cid) => {
+      const atLast = byKey[`${cid}|${lastWeek.week_nr}`];
+      if (atLast) return atLast.id;
+      // Klas heeft geen les in de laatste week → dupliceer zijn eigen laatste les.
+      const own = Object.values(byKey).filter((l) => l.class_id === cid && l.week_nr != null);
+      return own.length ? own.reduce((b, l) => (l.week_nr! > b.week_nr! ? l : b)).id : null;
+    }).filter((id): id is string => id != null);
+    if (!lessonIds.length) { toast("Geen les om te dupliceren"); return; }
+    const newWeek = lastWeek.week_nr + 1;
+    const newDate = new Date(new Date(lastWeek.date).getTime() + 7 * 864e5).toISOString().slice(0, 10);
+    try {
+      const n = await duplicate.mutateAsync({ lessonIds, date: newDate, week_nr: newWeek });
+      toast(`Lesweek ${newWeek} toegevoegd voor ${n} klas(sen)`);
+    } catch (e) { toast("Toevoegen mislukt: " + (e instanceof Error ? e.message : "")); }
+  };
+
   const submitAddLesson = async () => {
     if (!addLesson) return;
     const classIds = classes.filter((c) => selected.has(c.id)).map((c) => c.id);
@@ -306,6 +328,14 @@ export function Roostermatrix() {
                     })}
                   </tr>
                 ); })}
+                <tr>
+                  <td colSpan={1 + visibleClasses.length} style={{ padding: 8, background: "var(--bg-sunken)", textAlign: "center" }}>
+                    <button className="btn ghost sm" onClick={addNextWeek} disabled={selectedCount === 0 || duplicate.isPending}
+                      title={selectedCount === 0 ? "Selecteer eerst klassen" : "Dupliceert de onderste les (+7 dagen) voor de geselecteerde klassen"}>
+                      {duplicate.isPending ? "Bezig…" : `+ Volgende lesweek (+7 dagen) voor ${selectedCount} klas(sen)`}
+                    </button>
+                  </td>
+                </tr>
               </tbody>
             </table>
           </div>
