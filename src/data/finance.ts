@@ -90,6 +90,30 @@ export function useAddExpense() {
   });
 }
 
+export function useDeleteExpenses(schooljaarId: string | null) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (ids: string[]) => {
+      if (!ids.length) return;
+      const { error } = await supabase.from("expenses").delete().in("id", ids);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["finance", schooljaarId] }),
+  });
+}
+
+export function useDeleteIncomes(schooljaarId: string | null) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (ids: string[]) => {
+      if (!ids.length) return;
+      const { error } = await supabase.from("incomes").delete().in("id", ids);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["finance", schooljaarId] }),
+  });
+}
+
 /** Maps an expense category to a budget category name (prototype grouping). */
 export function budgetForCategory(cat: string | null): string | null {
   switch (cat) {

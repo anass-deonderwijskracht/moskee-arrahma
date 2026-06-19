@@ -4,7 +4,8 @@ import { Section, Card, Btn, Icon, Select, Badge, Pills, QBar, pct, metricKind, 
 import { Modal, Field, ModalFooter } from "@/components/ui/Modal";
 import { Loading, ErrorState } from "@/features/_shared/states";
 import { useToast } from "@/components/chrome/Toast";
-import { useClasses, useClassMetrics, useCreateClass, type ClassRow } from "@/data/classes";
+import { useTableTools, SortTh, SelectTh, SelectTd, SearchBox, BulkBar } from "@/features/_shared/tableTools";
+import { useClasses, useClassMetrics, useCreateClass, useDeleteClasses, type ClassRow } from "@/data/classes";
 import { useTeachers } from "@/data/people";
 import { useSchooljaren, useCurrentSchooljaar } from "@/data/schooljaren";
 import { KlassenOverzichtKanban } from "./KlassenOverzichtKanban";
@@ -25,8 +26,26 @@ export function ClassesList() {
   const { data: metrics } = useClassMetrics();
   const { data: teachers } = useTeachers();
   const createClass = useCreateClass();
+  const del = useDeleteClasses();
   const toast = useToast();
   const m = metrics ?? {};
+
+  const tools = useTableTools({
+    rows: data ?? [],
+    getId: (c) => c.id,
+    search: (c, q) => c.code.toLowerCase().includes(q) || (c.teacher?.short ?? "").toLowerCase().includes(q) || (c.quran_teacher?.short ?? "").toLowerCase().includes(q),
+    sorters: {
+      code: (c) => c.grade ?? c.code,
+      track: (c) => c.track,
+      teacher: (c) => c.teacher?.short,
+      quran: (c) => c.quran_teacher?.short,
+      day: (c) => c.day,
+      bezetting: (c) => m[c.id]?.leerling_count ?? 0,
+      aanw: (c) => m[c.id]?.avg_attendance_pct,
+    },
+    initialSort: { key: "code", dir: "asc" },
+  });
+  const rows = tools.view;
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState({ code: "", grade: 1, track: "regulier", day: "Zaterdag", time: "09:00 - 12:00", location: "Moskee Arrahma", capacity: 13, teacher_id: "", quran_teacher_id: "" });
   const saveClass = async () => {
@@ -58,6 +77,12 @@ export function ClassesList() {
     } catch (err) { toast("Dupliceren mislukt: " + (err instanceof Error ? err.message : "")); }
   };
 
+  const onDelete = () => {
+    const ids = tools.selectedIds;
+    if (!ids.length || !confirm(`${ids.length} klas(sen) verwijderen? Dit verwijdert ook de gekoppelde leerlingen, lessen en roosters van deze klas(sen).`)) return;
+    del.mutate(ids, { onSuccess: () => { toast(`${ids.length} klas(sen) verwijderd`); tools.clear(); }, onError: () => toast("Verwijderen mislukt") });
+  };
+
   if (isError) return <ErrorState error={error} />;
 
   const viewOptions: Option<View>[] = [{ value: "grid", label: "Kaarten" }, { value: "table", label: "Tabel" }, { value: "overzicht", label: "Klassenoverzicht" }];
@@ -68,6 +93,7 @@ export function ClassesList() {
       sub="9 klassen — Klas 1–7 (regulier) + Hifdh-K & Hifdh-B"
       actions={
         <>
+          {view === "table" && <SearchBox value={tools.q} onChange={tools.setQ} placeholder="Zoek klas of docent…" width={200} />}
           <Pills value={view} onChange={setView} options={viewOptions} />
           <Select value={effectiveSj ?? ""} onChange={(e) => setSjId(e.target.value)} style={{ width: 130 }}>
             {(schooljaren ?? []).map((s) => (
@@ -124,35 +150,50 @@ export function ClassesList() {
           })}
         </div>
       ) : (
-        <Card>
-          <table className="table">
-            <thead>
-              <tr><th>Klas</th><th>Traject</th><th>Docent</th><th>Qur'an-docent</th><th>Dag/tijd</th><th>Bezetting</th><th>Aanw.</th><th style={{ width: 1 }}></th></tr>
-            </thead>
-            <tbody>
-              {(data ?? []).map((c) => {
-                const cm = m[c.id];
-                return (
-                  <tr key={c.id} onClick={() => navigate("/classes/" + c.id)}>
-                    <td className="font-semibold">{c.code}</td>
-                    <td><Badge kind={c.track === "hifdh" ? "accent" : "info"}>{c.track === "hifdh" ? "Hifdh" : "Regulier"}</Badge></td>
-                    <td className="text-sm">{c.teacher?.short ?? "—"}</td>
-                    <td className="text-sm">{c.quran_teacher?.short ?? "—"}</td>
-                    <td className="text-sm">{c.day} · {c.time}</td>
-                    <td className="num">{cm?.leerling_count ?? 0} / {c.capacity}</td>
-                    <td><Badge kind={metricKind(cm?.avg_attendance_pct)}>{pct(cm?.avg_attendance_pct)}</Badge></td>
-                    <td>
-                      <div className="flex items-center gap-1 justify-end">
-                        <button className="btn ghost sm" title="Klas dupliceren" disabled={createClass.isPending} onClick={(e) => duplicateClass(c, e)}><Icon name="copy" size={14} /></button>
-                        <Icon name="chevronRight" size={14} />
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </Card>
+        <>
+          <BulkBar count={tools.selectedIds.length} noun="klas(sen)" onClear={tools.clear} onDelete={onDelete} pending={del.isPending} />
+          <Card>
+            <table className="table">
+              <thead>
+                <tr>
+                  <SelectTh allChecked={tools.allChecked} onToggle={tools.toggleAll} />
+                  <SortTh label="Klas" k="code" sort={tools.sort} onSort={tools.toggleSort} />
+                  <SortTh label="Traject" k="track" sort={tools.sort} onSort={tools.toggleSort} />
+                  <SortTh label="Docent" k="teacher" sort={tools.sort} onSort={tools.toggleSort} />
+                  <SortTh label="Qur'an-docent" k="quran" sort={tools.sort} onSort={tools.toggleSort} />
+                  <SortTh label="Dag/tijd" k="day" sort={tools.sort} onSort={tools.toggleSort} />
+                  <SortTh label="Bezetting" k="bezetting" sort={tools.sort} onSort={tools.toggleSort} />
+                  <SortTh label="Aanw." k="aanw" sort={tools.sort} onSort={tools.toggleSort} />
+                  <th style={{ width: 1 }}></th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((c) => {
+                  const cm = m[c.id];
+                  const isChecked = tools.checked.has(c.id);
+                  return (
+                    <tr key={c.id} onClick={() => navigate("/classes/" + c.id)} className={isChecked ? "selected" : ""}>
+                      <SelectTd checked={isChecked} onToggle={() => tools.toggleOne(c.id)} label={`Selecteer ${c.code}`} />
+                      <td className="font-semibold">{c.code}</td>
+                      <td><Badge kind={c.track === "hifdh" ? "accent" : "info"}>{c.track === "hifdh" ? "Hifdh" : "Regulier"}</Badge></td>
+                      <td className="text-sm">{c.teacher?.short ?? "—"}</td>
+                      <td className="text-sm">{c.quran_teacher?.short ?? "—"}</td>
+                      <td className="text-sm">{c.day} · {c.time}</td>
+                      <td className="num">{cm?.leerling_count ?? 0} / {c.capacity}</td>
+                      <td><Badge kind={metricKind(cm?.avg_attendance_pct)}>{pct(cm?.avg_attendance_pct)}</Badge></td>
+                      <td>
+                        <div className="flex items-center gap-1 justify-end">
+                          <button className="btn ghost sm" title="Klas dupliceren" disabled={createClass.isPending} onClick={(e) => duplicateClass(c, e)}><Icon name="copy" size={14} /></button>
+                          <Icon name="chevronRight" size={14} />
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </Card>
+        </>
       )}
 
       {adding && (

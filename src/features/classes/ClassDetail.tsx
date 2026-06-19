@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, Navigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
+import { useSession } from "@/features/auth/AuthProvider";
 import { supabase } from "@/lib/supabase";
 import { Section, Tabs, Card, Stat, Badge, Btn, Icon, Avatar, QBar, Select, pct, type Option } from "@/components/ui";
 import { Modal, Field, ModalFooter } from "@/components/ui/Modal";
@@ -20,6 +21,7 @@ const currentYear = new Date().getFullYear();
 export function ClassDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { isDocent, classId } = useSession();
   const classQ = useClass(id);
   const leerlingenQ = useClassLeerlingen(id);
   const lessonsQ = useLessons(id);
@@ -48,6 +50,9 @@ export function ClassDetail() {
 
   const lesson = lessons.find((l) => l.id === (lessonId ?? defaultLessonId)) ?? null;
   const c = classQ.data;
+
+  // A docent may only open their own class; bounce them to it (or home).
+  if (isDocent && id !== classId) return <Navigate to={classId ? `/classes/${classId}` : "/"} replace />;
 
   if (classQ.isError) return <ErrorState error={classQ.error} />;
   if (classQ.isLoading || !c) return <Loading label="Klas laden…" />;

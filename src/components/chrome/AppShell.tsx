@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Outlet, NavLink, useLocation } from "react-router-dom";
 import { Icon } from "@/components/ui";
+import { useSession } from "@/features/auth/AuthProvider";
 import { Sidebar } from "./Sidebar";
 import { TweaksPanel } from "./TweaksPanel";
 import { useTweaks } from "./useTweaks";
@@ -33,6 +34,10 @@ const TOPNAV = [
 ];
 
 function TopNavRow() {
+  const { isDocent, classId } = useSession();
+  const items = isDocent
+    ? [{ to: classId ? `/classes/${classId}` : "/", label: "Mijn klas" }]
+    : TOPNAV;
   return (
     <div
       style={{
@@ -40,7 +45,7 @@ function TopNavRow() {
         padding: "0 var(--pad-page)", display: "flex", gap: 4, overflowX: "auto",
       }}
     >
-      {TOPNAV.map((i) => (
+      {items.map((i) => (
         <NavLink
           key={i.to}
           to={i.to}

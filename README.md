@@ -104,6 +104,40 @@ bestand (naam kind, leeftijd/geboortejaar, geslacht, traject, voorkeur lesdag, e
 twee ouders). Pas die keywords aan zodra de exacte labels van het formulier bekend
 zijn. Het endpoint is publiek maar afgeschermd met het gedeelde secret.
 
+## Gebruikersbeheer & rollen (admins + docenten)
+
+In **Instellingen → Gebruikersbeheer** kan een admin gebruikers toevoegen en
+verwijderen. Twee rollen:
+
+- **Admin** — volledige toegang (zoals nu).
+- **Docent** — gekoppeld aan precies één klas; ziet en beheert **alleen die klas**
+  (les- en Qur'an-administratie, lessen, leerlingen). Afgedwongen op de database via
+  RLS (`current_class_id()` + `docent_*`-policies in migratie `014`).
+
+Bij toevoegen vul je **naam, e-mailadres en (voor docenten) de klas** in. De
+gebruiker krijgt automatisch een **"stel je wachtwoord"-e-mail** (recovery-flow,
+géén magic link) en kiest zelf een wachtwoord via `/wachtwoord-herstellen`.
+
+**Eenmalig deployen:**
+
+1. **Migratie toepassen** — open de Supabase **SQL editor** en run
+   `supabase/migrations/014_user_management.sql` (of de bijgewerkte
+   `supabase/apply_all.sql`). Voegt de `docent`-rol, `profiles.class_id`/`email`
+   en de docent-RLS toe. *(Re-runnable.)*
+
+2. **Edge Function deployen** (service_role — server-side, nooit in de browser):
+   ```bash
+   supabase functions deploy manage-users
+   ```
+   `verify_jwt` blijft aan; de functie controleert zelf dat de aanroeper een admin is.
+   `SUPABASE_URL` / `SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY` worden
+   automatisch door de Edge runtime geïnjecteerd — geen extra secrets nodig.
+
+3. **Auth e-mail** — zorg dat in Supabase → **Auth → URL Configuration** de
+   **Site URL** + redirect-URLs het deploy-adres bevatten, zodat de wachtwoord-link
+   naar `/wachtwoord-herstellen` werkt. De mailtekst pas je aan onder
+   **Auth → Email Templates → Reset Password**.
+
 ## Deployen (gratis, stabiel)
 
 De frontend is een statische Vite-build (`npm run build` → `dist/`). Hosten kan

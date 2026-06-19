@@ -1,6 +1,8 @@
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/features/auth/AuthProvider";
 import { ProtectedRoute } from "@/features/auth/ProtectedRoute";
+import { RequireAdmin } from "@/features/auth/RequireAdmin";
+import { RoleHome } from "@/features/auth/RoleHome";
 import { LoginPage } from "@/features/auth/LoginPage";
 import { ResetPasswordPage } from "@/features/auth/ResetPasswordPage";
 import { AppShell } from "@/components/chrome/AppShell";
@@ -31,23 +33,27 @@ export function App() {
             <Route path="/wachtwoord-herstellen" element={<ResetPasswordPage />} />
             <Route element={<ProtectedRoute />}>
               <Route element={<AppShell />}>
-                <Route path="/dashboard" element={<Dashboard />} />
-                <Route path="/planning" element={<PlanningScreen />} />
-                <Route path="/kinderen" element={<KinderenList />} />
-                <Route path="/kinderen/:id" element={<KindDetail />} />
-                <Route path="/ouders" element={<OudersList />} />
-                <Route path="/ouders/:id" element={<OuderDetail />} />
-                <Route path="/teachers" element={<TeachersList />} />
-                <Route path="/students" element={<StudentsList />} />
-                <Route path="/students/:id" element={<LeerlingDetail />} />
-                <Route path="/classes" element={<ClassesList />} />
+                {/* Accessible to admins and to the docent of that class (RLS-scoped). */}
                 <Route path="/classes/:id" element={<ClassDetail />} />
-                <Route path="/enrollments" element={<EnrollmentsScreen />} />
-                <Route path="/finance" element={<FinanceScreen />} />
-                <Route path="/settings" element={<SettingsScreen />} />
+                <Route path="/students/:id" element={<LeerlingDetail />} />
+                {/* Admin-only. */}
+                <Route element={<RequireAdmin />}>
+                  <Route path="/dashboard" element={<Dashboard />} />
+                  <Route path="/planning" element={<PlanningScreen />} />
+                  <Route path="/kinderen" element={<KinderenList />} />
+                  <Route path="/kinderen/:id" element={<KindDetail />} />
+                  <Route path="/ouders" element={<OudersList />} />
+                  <Route path="/ouders/:id" element={<OuderDetail />} />
+                  <Route path="/teachers" element={<TeachersList />} />
+                  <Route path="/students" element={<StudentsList />} />
+                  <Route path="/classes" element={<ClassesList />} />
+                  <Route path="/enrollments" element={<EnrollmentsScreen />} />
+                  <Route path="/finance" element={<FinanceScreen />} />
+                  <Route path="/settings" element={<SettingsScreen />} />
+                </Route>
               </Route>
             </Route>
-            <Route path="*" element={<Navigate to="/dashboard" replace />} />
+            <Route path="*" element={<RoleHome />} />
           </Routes>
         </ToastProvider>
       </AuthProvider>

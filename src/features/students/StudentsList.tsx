@@ -4,7 +4,8 @@ import { Section, Card, Avatar, Icon, Btn, Select, Badge, pct, metricKind } from
 import { Modal, Field, ModalFooter } from "@/components/ui/Modal";
 import { Loading, ErrorState } from "@/features/_shared/states";
 import { useToast } from "@/components/chrome/Toast";
-import { useLeerlingen, useLeerlingMetrics, useCreateLeerling } from "@/data/leerlingen";
+import { useTableTools, SortTh, SelectTh, SelectTd, SearchBox, BulkBar } from "@/features/_shared/tableTools";
+import { useLeerlingen, useLeerlingMetrics, useCreateLeerling, useDeleteLeerlingen } from "@/data/leerlingen";
 import { useClasses } from "@/data/classes";
 import { useKinderen } from "@/data/people";
 import { useSchooljaren, useCurrentSchooljaar } from "@/data/schooljaren";
@@ -25,8 +26,8 @@ export function StudentsList() {
   const { data: yearClasses } = useClasses(effectiveSj);
   const { data: kinderen } = useKinderen();
   const createLeerling = useCreateLeerling();
+  const del = useDeleteLeerlingen();
   const toast = useToast();
-  const [q, setQ] = useState("");
   const [classFilter, setClassFilter] = useState("");
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState({ kind_id: "", class_id: "", niveau: "1", joined: new Date().toISOString().slice(0, 10) });
@@ -46,17 +47,37 @@ export function StudentsList() {
     return [...seen.entries()];
   }, [data]);
 
-  const rows = useMemo(() => {
-    const term = q.trim().toLowerCase();
-    return (data ?? []).filter(
-      (l) =>
-        (!term || (l.kinderen?.full_name ?? "").toLowerCase().includes(term) || (l.leerlingnummer ?? "").toLowerCase().includes(term)) &&
-        (!classFilter || l.class_id === classFilter),
-    );
-  }, [data, q, classFilter]);
+  const m = metrics ?? {};
+  const classFiltered = useMemo(
+    () => (data ?? []).filter((l) => !classFilter || l.class_id === classFilter),
+    [data, classFilter],
+  );
+
+  const tools = useTableTools({
+    rows: classFiltered,
+    getId: (l) => l.id,
+    search: (l, q) => (l.kinderen?.full_name ?? "").toLowerCase().includes(q) || (l.leerlingnummer ?? "").toLowerCase().includes(q),
+    sorters: {
+      name: (l) => l.kinderen?.full_name,
+      nummer: (l) => l.leerlingnummer,
+      klas: (l) => l.classes?.code,
+      niveau: (l) => l.niveau,
+      attendance: (l) => m[l.id]?.attendance_pct,
+      arabic: (l) => m[l.id]?.arabic_homework_pct,
+      quran: (l) => m[l.id]?.quran_learned_pct,
+      surahs: (l) => m[l.id]?.surahs_known,
+    },
+    initialSort: { key: "name", dir: "asc" },
+  });
+  const rows = tools.view;
 
   if (isError) return <ErrorState error={error} />;
-  const m = metrics ?? {};
+
+  const onDelete = () => {
+    const ids = tools.selectedIds;
+    if (!ids.length || !confirm(`${ids.length} leerling(en) uitschrijven en verwijderen? Dit verwijdert hun aanwezigheid, huiswerk en Qur'an-voortgang voor dit schooljaar.`)) return;
+    del.mutate(ids, { onSuccess: () => { toast(`${ids.length} leerling(en) verwijderd`); tools.clear(); }, onError: () => toast("Verwijderen mislukt") });
+  };
 
   return (
     <Section
@@ -64,9 +85,7 @@ export function StudentsList() {
       sub="Inschrijvingen per schooljaar, met afgeleide hoofdmetrics"
       actions={
         <>
-          <div style={{ width: 200 }}>
-            <input className="input" placeholder="Zoek naam of nummer…" value={q} onChange={(e) => setQ(e.target.value)} />
-          </div>
+          <SearchBox value={tools.q} onChange={tools.setQ} placeholder="Zoek naam of nummer…" width={200} />
           <Select value={effectiveSj ?? ""} onChange={(e) => setSjId(e.target.value)} style={{ width: 130 }}>
             {(schooljaren ?? []).map((s) => (
               <option key={s.id} value={s.id}>{s.name}{s.is_current ? " (huidig)" : ""}</option>
@@ -77,32 +96,43 @@ export function StudentsList() {
       }
     >
       {classes.length > 0 && (
-        <div className="mb-4" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <div className="mb-4" style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
           <Select value={classFilter} onChange={(e) => setClassFilter(e.target.value)} style={{ width: 180 }}>
             <option value="">Alle klassen</option>
             {classes.map(([id, code]) => <option key={id} value={id}>{code}</option>)}
           </Select>
+          <BulkBar count={tools.selectedIds.length} noun="leerling(en)" onClear={tools.clear} onDelete={onDelete} pending={del.isPending} />
         </div>
       )}
       <Card>
         {isLoading ? (
           <Loading />
         ) : rows.length === 0 ? (
-          <div className="empty">{q || classFilter ? "Geen leerlingen gevonden." : "Nog geen leerlingen voor dit schooljaar."}</div>
+          <div className="empty">{tools.q || classFilter ? "Geen leerlingen gevonden." : "Nog geen leerlingen voor dit schooljaar."}</div>
         ) : (
           <table className="table">
             <thead>
               <tr>
-                <th>Leerling</th><th>Nr.</th><th>Klas</th><th>Niveau</th>
-                <th>Aanw.</th><th>Arab. HW</th><th>Qur'an</th><th>Surahs</th><th style={{ width: 1 }}></th>
+                <SelectTh allChecked={tools.allChecked} onToggle={tools.toggleAll} />
+                <SortTh label="Leerling" k="name" sort={tools.sort} onSort={tools.toggleSort} />
+                <SortTh label="Nr." k="nummer" sort={tools.sort} onSort={tools.toggleSort} />
+                <SortTh label="Klas" k="klas" sort={tools.sort} onSort={tools.toggleSort} />
+                <SortTh label="Niveau" k="niveau" sort={tools.sort} onSort={tools.toggleSort} />
+                <SortTh label="Aanw." k="attendance" sort={tools.sort} onSort={tools.toggleSort} />
+                <SortTh label="Arab. HW" k="arabic" sort={tools.sort} onSort={tools.toggleSort} />
+                <SortTh label="Qur'an" k="quran" sort={tools.sort} onSort={tools.toggleSort} />
+                <SortTh label="Surahs" k="surahs" sort={tools.sort} onSort={tools.toggleSort} />
+                <th style={{ width: 1 }}></th>
               </tr>
             </thead>
             <tbody>
               {rows.map((l) => {
                 const mm = m[l.id];
                 const age = l.kinderen?.birth_year ? currentYear - l.kinderen.birth_year : null;
+                const isChecked = tools.checked.has(l.id);
                 return (
-                  <tr key={l.id} onClick={() => navigate("/students/" + l.id)}>
+                  <tr key={l.id} onClick={() => navigate("/students/" + l.id)} className={isChecked ? "selected" : ""}>
+                    <SelectTd checked={isChecked} onToggle={() => tools.toggleOne(l.id)} label={`Selecteer ${l.kinderen?.full_name ?? "leerling"}`} />
                     <td>
                       <div className="flex items-center gap-3">
                         <Avatar name={l.kinderen?.full_name} initials={l.kinderen?.initials ?? undefined} size="sm" />

@@ -74,5 +74,14 @@ export function useSchooljaarMutations() {
     onSuccess: invalidate,
   });
 
-  return { add, setCurrent, remove };
+  const removeMany = useMutation({
+    mutationFn: async (ids: string[]) => {
+      if (!ids.length) return;
+      const { error } = await supabase.from("schooljaren").delete().in("id", ids);
+      if (error) throw error;
+    },
+    onSuccess: invalidate,
+  });
+
+  return { add, setCurrent, remove, removeMany };
 }

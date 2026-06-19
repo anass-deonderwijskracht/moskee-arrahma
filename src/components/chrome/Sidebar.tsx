@@ -7,25 +7,30 @@ type NavItem = { group?: string; id?: string; to?: string; label?: string; icon?
 
 export function Sidebar({ collapsed, setCollapsed }: { collapsed: boolean; setCollapsed: (v: boolean) => void }) {
   const { data: counts } = useNavCounts();
-  const { fullName, signOut } = useSession();
+  const { fullName, signOut, isDocent, classId } = useSession();
 
-  const items: NavItem[] = [
-    { group: "Overzicht" },
-    { to: "/dashboard", label: "Dashboard", icon: "home" },
-    { to: "/planning", label: "Planning", icon: "calendar" },
-    { group: "Mensen" },
-    { to: "/kinderen", label: "Kinderen", icon: "users", countKey: "kinderen" },
-    { to: "/ouders", label: "Ouders & voogden", icon: "user", countKey: "ouders" },
-    { to: "/teachers", label: "Docenten", icon: "user", countKey: "teachers" },
-    { group: "Onderwijs" },
-    { to: "/students", label: "Leerlingen (dit jaar)", icon: "school", countKey: "leerlingen" },
-    { to: "/classes", label: "Klassen", icon: "school", countKey: "classes" },
-    { group: "Administratie" },
-    { to: "/enrollments", label: "Inschrijvingen", icon: "inbox", countKey: "enrollments" },
-    { to: "/finance", label: "Financiën", icon: "coins" },
-    { group: "Systeem" },
-    { to: "/settings", label: "Instellingen", icon: "settings" },
-  ];
+  const items: NavItem[] = isDocent
+    ? [
+        { group: "Mijn klas" },
+        { to: classId ? `/classes/${classId}` : "/", label: "Mijn klas", icon: "school" },
+      ]
+    : [
+        { group: "Overzicht" },
+        { to: "/dashboard", label: "Dashboard", icon: "home" },
+        { to: "/planning", label: "Planning", icon: "calendar" },
+        { group: "Mensen" },
+        { to: "/kinderen", label: "Kinderen", icon: "users", countKey: "kinderen" },
+        { to: "/ouders", label: "Ouders & voogden", icon: "user", countKey: "ouders" },
+        { to: "/teachers", label: "Docenten", icon: "user", countKey: "teachers" },
+        { group: "Onderwijs" },
+        { to: "/students", label: "Leerlingen (dit jaar)", icon: "school", countKey: "leerlingen" },
+        { to: "/classes", label: "Klassen", icon: "school", countKey: "classes" },
+        { group: "Administratie" },
+        { to: "/enrollments", label: "Inschrijvingen", icon: "inbox", countKey: "enrollments" },
+        { to: "/finance", label: "Financiën", icon: "coins" },
+        { group: "Systeem" },
+        { to: "/settings", label: "Instellingen", icon: "settings" },
+      ];
 
   const initials = (fullName || "Beheer").split(" ").map((n) => n[0]).slice(0, 2).join("").toUpperCase();
 
@@ -65,7 +70,7 @@ export function Sidebar({ collapsed, setCollapsed }: { collapsed: boolean; setCo
         {!collapsed && (
           <div className="who">
             <span className="nm">{fullName ?? "Beheerder"}</span>
-            <span className="rl">Bestuur · Beheerder</span>
+            <span className="rl">{isDocent ? "Docent" : "Bestuur · Beheerder"}</span>
           </div>
         )}
         <button className="btn ghost sm" onClick={() => { void signOut(); }} title="Uitloggen" style={{ padding: 4 }}>

@@ -3,8 +3,9 @@ import { Section, Card, Stat, Btn, Icon, Badge, Select, EUR, type BadgeKind } fr
 import { Modal, Field, ModalFooter } from "@/components/ui/Modal";
 import { Loading, ErrorState } from "@/features/_shared/states";
 import { useToast } from "@/components/chrome/Toast";
+import { useTableTools, SortTh, SelectTh, SelectTd, SearchBox, BulkBar } from "@/features/_shared/tableTools";
 import { useSchooljaren, useCurrentSchooljaar } from "@/data/schooljaren";
-import { useFinance, useAppSettings, useAddExpense, useAddIncome, budgetForCategory } from "@/data/finance";
+import { useFinance, useAppSettings, useAddExpense, useAddIncome, useDeleteExpenses, useDeleteIncomes, budgetForCategory, type Expense, type Income } from "@/data/finance";
 
 const CAT_KIND: Record<string, BadgeKind> = { Materialen: "accent", Salaris: "primary", Faciliteit: "info", Activiteit: "success", Catering: "warn", Software: "default" };
 const CATEGORIES = ["Materialen", "Salaris", "Faciliteit", "Activiteit", "Catering", "Software", "Overig"];
@@ -122,46 +123,9 @@ export function FinanceScreen() {
               </Card>
             </div>
 
-            {incomes.length > 0 && (
-              <Card title={<><Icon name="arrowUp" size={14} /> Handmatige inkomsten</>} sub={`${incomes.length} posten · schooljaar ${schooljaar?.name ?? ""}`} className="mb-6">
-                <table className="table">
-                  <thead><tr><th>Datum</th><th>Bron</th><th>Omschrijving</th><th style={{ textAlign: "right" }}>Bedrag</th></tr></thead>
-                  <tbody>
-                    {incomes.map((i) => (
-                      <tr key={i.id}>
-                        <td className="font-mono text-sm">{i.date}</td>
-                        <td><Badge kind="success">{i.source}</Badge></td>
-                        <td>{i.description}</td>
-                        <td className="num font-semibold" style={{ textAlign: "right" }}>{EUR(Number(i.amount))}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </Card>
-            )}
+            {incomes.length > 0 && <IncomesTable incomes={incomes} schooljaarId={effectiveSj} schooljaarName={schooljaar?.name ?? ""} />}
 
-            <Card title={<><Icon name="list" size={14} /> Uitgaven</>} sub={`${expenses.length} uitgaven · schooljaar ${schooljaar?.name ?? ""}`}>
-              {expenses.length === 0 ? <div className="empty">Nog geen uitgaven voor dit schooljaar.</div> : (
-                <table className="table">
-                  <thead><tr><th>Datum</th><th>Categorie</th><th>Beschrijving</th><th>Leverancier</th><th style={{ textAlign: "right" }}>Bedrag</th></tr></thead>
-                  <tbody>
-                    {expenses.map((x) => (
-                      <tr key={x.id}>
-                        <td className="font-mono text-sm">{x.date}</td>
-                        <td><Badge kind={CAT_KIND[x.category ?? ""] ?? "default"}>{x.category}</Badge></td>
-                        <td>{x.description}</td>
-                        <td className="text-sm text-subtle">{x.vendor}</td>
-                        <td className="num font-semibold" style={{ textAlign: "right" }}>{EUR(Number(x.amount))}</td>
-                      </tr>
-                    ))}
-                    <tr style={{ background: "var(--bg-sunken)", fontWeight: 600 }}>
-                      <td colSpan={4} style={{ textAlign: "right", padding: "12px 16px" }}>Totaal</td>
-                      <td className="num" style={{ textAlign: "right", padding: "12px 16px" }}>{EUR(totalExpenses)}</td>
-                    </tr>
-                  </tbody>
-                </table>
-              )}
-            </Card>
+            <ExpensesTable expenses={expenses} schooljaarId={effectiveSj} schooljaarName={schooljaar?.name ?? ""} total={totalExpenses} />
           </>
         )}
       </Section>
@@ -175,6 +139,108 @@ export function FinanceScreen() {
           onSave={async (row) => { try { await addIncome.mutateAsync({ ...row, schooljaar_id: effectiveSj }); toast("Inkomst toegevoegd"); setShowAddIncome(false); } catch (e) { toast("Opslaan mislukt: " + (e instanceof Error ? e.message : "")); } }} />
       )}
     </>
+  );
+}
+
+function IncomesTable({ incomes, schooljaarId, schooljaarName }: { incomes: Income[]; schooljaarId: string | null; schooljaarName: string }) {
+  const toast = useToast();
+  const del = useDeleteIncomes(schooljaarId);
+  const tools = useTableTools({
+    rows: incomes,
+    getId: (i) => i.id,
+    search: (i, q) => (i.source ?? "").toLowerCase().includes(q) || (i.description ?? "").toLowerCase().includes(q) || (i.date ?? "").toLowerCase().includes(q),
+    sorters: { date: (i) => i.date, source: (i) => i.source, description: (i) => i.description, amount: (i) => Number(i.amount) },
+    initialSort: { key: "date", dir: "desc" },
+  });
+  const onDelete = () => {
+    const ids = tools.selectedIds;
+    if (!ids.length || !confirm(`${ids.length} inkomstpost(en) verwijderen?`)) return;
+    del.mutate(ids, { onSuccess: () => { toast(`${ids.length} inkomstpost(en) verwijderd`); tools.clear(); }, onError: () => toast("Verwijderen mislukt") });
+  };
+  return (
+    <Card title={<><Icon name="arrowUp" size={14} /> Handmatige inkomsten</>} sub={`${incomes.length} posten · schooljaar ${schooljaarName}`} className="mb-6"
+      action={<SearchBox value={tools.q} onChange={tools.setQ} placeholder="Zoek inkomst…" width={200} />}>
+      <BulkBar count={tools.selectedIds.length} noun="post(en)" onClear={tools.clear} onDelete={onDelete} pending={del.isPending} />
+      <table className="table">
+        <thead><tr>
+          <SelectTh allChecked={tools.allChecked} onToggle={tools.toggleAll} />
+          <SortTh label="Datum" k="date" sort={tools.sort} onSort={tools.toggleSort} />
+          <SortTh label="Bron" k="source" sort={tools.sort} onSort={tools.toggleSort} />
+          <SortTh label="Omschrijving" k="description" sort={tools.sort} onSort={tools.toggleSort} />
+          <SortTh label="Bedrag" k="amount" sort={tools.sort} onSort={tools.toggleSort} style={{ textAlign: "right" }} />
+        </tr></thead>
+        <tbody>
+          {tools.view.map((i) => {
+            const isChecked = tools.checked.has(i.id);
+            return (
+              <tr key={i.id} className={isChecked ? "selected" : ""}>
+                <SelectTd checked={isChecked} onToggle={() => tools.toggleOne(i.id)} label="Selecteer inkomst" />
+                <td className="font-mono text-sm">{i.date}</td>
+                <td><Badge kind="success">{i.source}</Badge></td>
+                <td>{i.description}</td>
+                <td className="num font-semibold" style={{ textAlign: "right" }}>{EUR(Number(i.amount))}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </Card>
+  );
+}
+
+function ExpensesTable({ expenses, schooljaarId, schooljaarName, total }: { expenses: Expense[]; schooljaarId: string | null; schooljaarName: string; total: number }) {
+  const toast = useToast();
+  const del = useDeleteExpenses(schooljaarId);
+  const tools = useTableTools({
+    rows: expenses,
+    getId: (x) => x.id,
+    search: (x, q) => (x.category ?? "").toLowerCase().includes(q) || (x.description ?? "").toLowerCase().includes(q) || (x.vendor ?? "").toLowerCase().includes(q) || (x.date ?? "").toLowerCase().includes(q),
+    sorters: { date: (x) => x.date, category: (x) => x.category, description: (x) => x.description, vendor: (x) => x.vendor, amount: (x) => Number(x.amount) },
+    initialSort: { key: "date", dir: "desc" },
+  });
+  const onDelete = () => {
+    const ids = tools.selectedIds;
+    if (!ids.length || !confirm(`${ids.length} uitgave(n) verwijderen?`)) return;
+    del.mutate(ids, { onSuccess: () => { toast(`${ids.length} uitgave(n) verwijderd`); tools.clear(); }, onError: () => toast("Verwijderen mislukt") });
+  };
+  return (
+    <Card title={<><Icon name="list" size={14} /> Uitgaven</>} sub={`${expenses.length} uitgaven · schooljaar ${schooljaarName}`}
+      action={expenses.length > 0 ? <SearchBox value={tools.q} onChange={tools.setQ} placeholder="Zoek uitgave…" width={200} /> : undefined}>
+      {expenses.length === 0 ? <div className="empty">Nog geen uitgaven voor dit schooljaar.</div> : (
+        <>
+          <BulkBar count={tools.selectedIds.length} noun="uitgave(n)" onClear={tools.clear} onDelete={onDelete} pending={del.isPending} />
+          <table className="table">
+            <thead><tr>
+              <SelectTh allChecked={tools.allChecked} onToggle={tools.toggleAll} />
+              <SortTh label="Datum" k="date" sort={tools.sort} onSort={tools.toggleSort} />
+              <SortTh label="Categorie" k="category" sort={tools.sort} onSort={tools.toggleSort} />
+              <SortTh label="Beschrijving" k="description" sort={tools.sort} onSort={tools.toggleSort} />
+              <SortTh label="Leverancier" k="vendor" sort={tools.sort} onSort={tools.toggleSort} />
+              <SortTh label="Bedrag" k="amount" sort={tools.sort} onSort={tools.toggleSort} style={{ textAlign: "right" }} />
+            </tr></thead>
+            <tbody>
+              {tools.view.map((x) => {
+                const isChecked = tools.checked.has(x.id);
+                return (
+                  <tr key={x.id} className={isChecked ? "selected" : ""}>
+                    <SelectTd checked={isChecked} onToggle={() => tools.toggleOne(x.id)} label="Selecteer uitgave" />
+                    <td className="font-mono text-sm">{x.date}</td>
+                    <td><Badge kind={CAT_KIND[x.category ?? ""] ?? "default"}>{x.category}</Badge></td>
+                    <td>{x.description}</td>
+                    <td className="text-sm text-subtle">{x.vendor}</td>
+                    <td className="num font-semibold" style={{ textAlign: "right" }}>{EUR(Number(x.amount))}</td>
+                  </tr>
+                );
+              })}
+              <tr style={{ background: "var(--bg-sunken)", fontWeight: 600 }}>
+                <td colSpan={5} style={{ textAlign: "right", padding: "12px 16px" }}>Totaal</td>
+                <td className="num" style={{ textAlign: "right", padding: "12px 16px" }}>{EUR(total)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </>
+      )}
+    </Card>
   );
 }
 

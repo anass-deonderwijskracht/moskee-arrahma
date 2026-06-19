@@ -10,9 +10,9 @@ export interface Database {
   public: {
     Tables: {
       profiles: {
-        Row: { id: string; full_name: string | null; role: string } & Timestamps;
-        Insert: { id: string; full_name?: string | null; role?: string };
-        Update: { full_name?: string | null };
+        Row: { id: string; full_name: string | null; role: string; class_id: string | null; email: string | null } & Timestamps;
+        Insert: { id: string; full_name?: string | null; role?: string; class_id?: string | null; email?: string | null };
+        Update: { full_name?: string | null; role?: string; class_id?: string | null; email?: string | null };
         Relationships: [];
       };
       app_settings: {

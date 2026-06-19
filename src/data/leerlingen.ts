@@ -22,6 +22,23 @@ export function useCreateLeerling() {
   });
 }
 
+export function useDeleteLeerlingen() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (ids: string[]) => {
+      if (!ids.length) return;
+      const { error } = await supabase.from("leerlingen").delete().in("id", ids);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["leerlingen"] });
+      qc.invalidateQueries({ queryKey: ["class-leerlingen"] });
+      qc.invalidateQueries({ queryKey: ["leerling-metrics"] });
+      qc.invalidateQueries({ queryKey: ["nav-counts"] });
+    },
+  });
+}
+
 export type LeerlingRow = Tables<"leerlingen"> & {
   kinderen: { id: string; full_name: string; initials: string | null; gender: string | null; birth_year: number | null } | null;
   classes: { id: string; code: string; color: string | null } | null;

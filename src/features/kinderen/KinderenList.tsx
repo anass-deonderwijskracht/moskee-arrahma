@@ -1,10 +1,11 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Section, Card, Avatar, Icon, Btn, Select } from "@/components/ui";
 import { Modal, Field, ModalFooter } from "@/components/ui/Modal";
 import { Loading, ErrorState } from "@/features/_shared/states";
 import { useToast } from "@/components/chrome/Toast";
-import { useKinderen, useCreateKind } from "@/data/people";
+import { useTableTools, SortTh, SelectTh, SelectTd, SearchBox, BulkBar } from "@/features/_shared/tableTools";
+import { useKinderen, useCreateKind, useDeleteKinderen, type KindRow } from "@/data/people";
 import { useCurrentSchooljaar } from "@/data/schooljaren";
 
 const currentYear = new Date().getFullYear();
@@ -15,7 +16,7 @@ export function KinderenList() {
   const { data, isLoading, isError, error } = useKinderen();
   const { data: sj } = useCurrentSchooljaar();
   const createKind = useCreateKind();
-  const [q, setQ] = useState("");
+  const del = useDeleteKinderen();
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState({ first_name: "", last_name: "", gender: "", birth_year: "", address: "" });
   const saveKind = async () => {
@@ -26,12 +27,30 @@ export function KinderenList() {
     } catch (e) { toast("Toevoegen mislukt: " + (e instanceof Error ? e.message : "")); }
   };
 
-  const rows = useMemo(() => {
-    const term = q.trim().toLowerCase();
-    return (data ?? []).filter((k) => !term || k.full_name.toLowerCase().includes(term));
-  }, [data, q]);
+  const klasOf = (k: KindRow) =>
+    (k.leerlingen.find((l) => l.schooljaar_id === sj?.id) ?? k.leerlingen[0])?.classes?.code ?? "";
+
+  const tools = useTableTools({
+    rows: data ?? [],
+    getId: (k) => k.id,
+    search: (k, q) => k.full_name.toLowerCase().includes(q),
+    sorters: {
+      name: (k) => k.full_name,
+      gender: (k) => k.gender,
+      age: (k) => (k.birth_year ? currentYear - k.birth_year : null),
+      klas: (k) => klasOf(k),
+    },
+    initialSort: { key: "name", dir: "asc" },
+  });
+  const rows = tools.view;
 
   if (isError) return <ErrorState error={error} />;
+
+  const onDelete = () => {
+    const ids = tools.selectedIds;
+    if (!ids.length || !confirm(`${ids.length} kind(eren) verwijderen? Dit verwijdert ook hun leerling-jaren en oudergegevens-koppeling.`)) return;
+    del.mutate(ids, { onSuccess: () => { toast(`${ids.length} kind(eren) verwijderd`); tools.clear(); }, onError: () => toast("Verwijderen mislukt") });
+  };
 
   return (
     <Section
@@ -39,27 +58,38 @@ export function KinderenList() {
       sub="Alle kinderen, jaaroverstijgend — elk kind kan meerdere leerling-jaren hebben"
       actions={
         <>
-          <div style={{ width: 240 }}><input className="input" placeholder="Zoek kind…" value={q} onChange={(e) => setQ(e.target.value)} /></div>
+          <SearchBox value={tools.q} onChange={tools.setQ} placeholder="Zoek kind…" />
           <Btn icon="plus" kind="primary" onClick={() => setAdding(true)}>Kind toevoegen</Btn>
         </>
       }
     >
+      <BulkBar count={tools.selectedIds.length} noun="kind(eren)" onClear={tools.clear} onDelete={onDelete} pending={del.isPending} />
       <Card>
         {isLoading ? (
           <Loading />
         ) : rows.length === 0 ? (
-          <div className="empty">{q ? "Geen kinderen gevonden." : "Nog geen kinderen geregistreerd."}</div>
+          <div className="empty">{tools.q ? "Geen kinderen gevonden." : "Nog geen kinderen geregistreerd."}</div>
         ) : (
           <table className="table">
             <thead>
-              <tr><th>Kind</th><th>Geslacht</th><th>Leeftijd</th><th>Huidig jaar (klas)</th><th>Ouders</th><th style={{ width: 1 }}></th></tr>
+              <tr>
+                <SelectTh allChecked={tools.allChecked} onToggle={tools.toggleAll} />
+                <SortTh label="Kind" k="name" sort={tools.sort} onSort={tools.toggleSort} />
+                <SortTh label="Geslacht" k="gender" sort={tools.sort} onSort={tools.toggleSort} />
+                <SortTh label="Leeftijd" k="age" sort={tools.sort} onSort={tools.toggleSort} />
+                <SortTh label="Huidig jaar (klas)" k="klas" sort={tools.sort} onSort={tools.toggleSort} />
+                <th>Ouders</th>
+                <th style={{ width: 1 }}></th>
+              </tr>
             </thead>
             <tbody>
               {rows.map((k) => {
                 const current = k.leerlingen.find((l) => l.schooljaar_id === sj?.id) ?? k.leerlingen[0];
                 const age = k.birth_year ? currentYear - k.birth_year : null;
+                const isChecked = tools.checked.has(k.id);
                 return (
-                  <tr key={k.id} onClick={() => navigate("/kinderen/" + k.id)}>
+                  <tr key={k.id} onClick={() => navigate("/kinderen/" + k.id)} className={isChecked ? "selected" : ""}>
+                    <SelectTd checked={isChecked} onToggle={() => tools.toggleOne(k.id)} label={`Selecteer ${k.full_name}`} />
                     <td>
                       <div className="flex items-center gap-3">
                         <Avatar name={k.full_name} initials={k.initials ?? undefined} size="sm" />

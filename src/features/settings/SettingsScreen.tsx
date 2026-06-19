@@ -1,11 +1,16 @@
 import { useEffect, useState } from "react";
 import { Section, Card, Btn, Icon, Badge, Select, type IconName } from "@/components/ui";
+import { Modal, Field, ModalFooter } from "@/components/ui/Modal";
 import { Loading } from "@/features/_shared/states";
 import { useToast } from "@/components/chrome/Toast";
 import { supabase } from "@/lib/supabase";
+import { useSession } from "@/features/auth/AuthProvider";
 import { useAppSettings } from "@/data/finance";
-import { useSchooljaren } from "@/data/schooljaren";
+import { useSchooljaren, useCurrentSchooljaar } from "@/data/schooljaren";
+import { useClasses } from "@/data/classes";
+import { useUsers, useCreateUser, useDeleteUser } from "@/data/users";
 import { useAuditLog, useSaveSettings, useSchooljaarCounts, useSchooljaarMutations } from "@/data/settings";
+import { useTableTools, SortTh, SelectTh, BulkBar } from "@/features/_shared/tableTools";
 
 function downloadFile(name: string, content: string, mime: string) {
   const blob = new Blob([content], { type: mime });
@@ -23,9 +28,10 @@ function toCsv(rows: Record<string, unknown>[]): string {
   return [headers.join(";"), ...rows.map((r) => headers.map((h) => esc(r[h])).join(";"))].join("\n");
 }
 
-type SectionId = "general" | "schooljaren" | "audit" | "data";
+type SectionId = "general" | "users" | "schooljaren" | "audit" | "data";
 const SECTIONS: { id: SectionId; label: string; icon: IconName }[] = [
   { id: "general", label: "Algemeen", icon: "settings" },
+  { id: "users", label: "Gebruikersbeheer", icon: "user" },
   { id: "schooljaren", label: "Schooljaren", icon: "calendar" },
   { id: "audit", label: "Audit log", icon: "activity" },
   { id: "data", label: "Data & export", icon: "download" },
@@ -45,6 +51,7 @@ export function SettingsScreen() {
         </div>
         <div>
           {section === "general" && <GeneralSettings />}
+          {section === "users" && <UserManagement />}
           {section === "schooljaren" && <SchooljarenSettings />}
           {section === "audit" && <AuditLog />}
           {section === "data" && <DataExport />}
@@ -101,13 +108,127 @@ function GeneralSettings() {
   );
 }
 
+function UserManagement() {
+  const toast = useToast();
+  const { session } = useSession();
+  const { data: users, isLoading } = useUsers();
+  const { data: currentYear } = useCurrentSchooljaar();
+  const { data: classes } = useClasses(currentYear?.id ?? null);
+  const create = useCreateUser();
+  const del = useDeleteUser();
+  const [adding, setAdding] = useState(false);
+  const [form, setForm] = useState<{ full_name: string; email: string; role: "admin" | "docent"; class_id: string }>(
+    { full_name: "", email: "", role: "docent", class_id: "" },
+  );
+
+  const reset = () => setForm({ full_name: "", email: "", role: "docent", class_id: "" });
+
+  const onSave = async () => {
+    try {
+      const res = await create.mutateAsync({
+        full_name: form.full_name.trim(),
+        email: form.email.trim(),
+        role: form.role,
+        class_id: form.role === "docent" ? form.class_id || null : null,
+      });
+      toast(res.email_sent
+        ? `Uitnodiging verstuurd naar ${form.email} — de gebruiker stelt zelf een wachtwoord in.`
+        : `Account aangemaakt, maar de e-mail kon niet worden verstuurd. Gebruik "Wachtwoord vergeten" op het inlogscherm.`);
+      setAdding(false); reset();
+    } catch (e) {
+      toast("Mislukt: " + (e instanceof Error ? e.message : ""));
+    }
+  };
+
+  const onDelete = (id: string, label: string) => {
+    if (!confirm(`Gebruiker ${label} verwijderen? Dit account verliest direct toegang.`)) return;
+    del.mutate(id, {
+      onSuccess: () => toast("Gebruiker verwijderd"),
+      onError: (e) => toast("Verwijderen mislukt: " + (e instanceof Error ? e.message : "")),
+    });
+  };
+
+  const canSave = form.full_name.trim() && form.email.trim() && (form.role === "admin" || form.class_id);
+
+  return (
+    <div className="flex-col gap-4">
+      <Card
+        title={<><Icon name="user" size={14} /> Gebruikers</>}
+        sub="Admins beheren alles; docenten zien en beheren alleen hun eigen klas."
+        action={<Btn size="sm" icon="plus" kind="primary" onClick={() => { reset(); setAdding(true); }}>Gebruiker toevoegen</Btn>}
+      >
+        {isLoading ? <Loading /> : (
+          <table className="table">
+            <thead><tr><th>Naam</th><th>E-mail</th><th>Rol</th><th>Klas</th><th></th></tr></thead>
+            <tbody>
+              {(users ?? []).map((u) => (
+                <tr key={u.id}>
+                  <td className="font-semibold">{u.full_name ?? "—"}</td>
+                  <td className="font-mono text-sm">{u.email ?? "—"}</td>
+                  <td>{u.role === "admin" ? <Badge kind="primary">Admin</Badge> : <Badge kind="info">Docent</Badge>}</td>
+                  <td>{u.role === "docent" ? (u.class_code ?? <span className="text-subtle">— geen klas —</span>) : <span className="text-subtle">—</span>}</td>
+                  <td>
+                    {session?.user.id !== u.id && (
+                      <button className="btn ghost sm" title="Verwijderen" disabled={del.isPending}
+                        onClick={() => onDelete(u.id, u.full_name ?? u.email ?? "")}>
+                        <Icon name="trash" size={12} />
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </Card>
+
+      {adding && (
+        <Modal title="Gebruiker toevoegen" sub="De gebruiker krijgt een e-mail om zelf een wachtwoord in te stellen."
+          onClose={() => setAdding(false)}
+          footer={<ModalFooter onCancel={() => setAdding(false)} onSave={onSave} saving={create.isPending} disabled={!canSave} saveLabel="Uitnodigen" />}>
+          <Field label="Volledige naam"><input className="input" value={form.full_name} onChange={(e) => setForm((f) => ({ ...f, full_name: e.target.value }))} placeholder="Voornaam Achternaam" /></Field>
+          <Field label="E-mailadres"><input className="input" type="email" value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} placeholder="naam@voorbeeld.nl" /></Field>
+          <Field label="Rol">
+            <Select value={form.role} onChange={(e) => setForm((f) => ({ ...f, role: e.target.value as "admin" | "docent" }))}>
+              <option value="docent">Docent — alleen eigen klas</option>
+              <option value="admin">Admin — volledige toegang</option>
+            </Select>
+          </Field>
+          {form.role === "docent" && (
+            <Field label={`Klas${currentYear ? ` (${currentYear.name})` : ""}`}>
+              <Select value={form.class_id} onChange={(e) => setForm((f) => ({ ...f, class_id: e.target.value }))}>
+                <option value="">— Kies een klas —</option>
+                {(classes ?? []).filter((c) => !currentYear || c.schooljaar_id === currentYear.id).map((c) => <option key={c.id} value={c.id}>{c.code}</option>)}
+              </Select>
+            </Field>
+          )}
+        </Modal>
+      )}
+    </div>
+  );
+}
+
 function SchooljarenSettings() {
   const toast = useToast();
   const { data: schooljaren, isLoading } = useSchooljaren();
   const { data: counts } = useSchooljaarCounts();
-  const { add, setCurrent, remove } = useSchooljaarMutations();
+  const { add, setCurrent, remove, removeMany } = useSchooljaarMutations();
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState({ name: "", code: "", start_date: "", end_date: "", lesdagen: 32 });
+
+  const tools = useTableTools({
+    rows: schooljaren ?? [],
+    getId: (s) => s.id,
+    sorters: {
+      name: (s) => s.name,
+      start: (s) => s.start_date,
+      end: (s) => s.end_date,
+      lesdagen: (s) => s.lesdagen,
+      klassen: (s) => counts?.klassen[s.id] ?? 0,
+      uitgaven: (s) => counts?.uitgaven[s.id] ?? 0,
+    },
+    initialSort: { key: "name", dir: "desc" },
+  });
 
   if (isLoading) return <Loading />;
 
@@ -119,15 +240,35 @@ function SchooljarenSettings() {
     } catch (e) { toast("Mislukt: " + (e instanceof Error ? e.message : "")); }
   };
 
+  // Never bulk-delete the current school year; only deletable rows count.
+  const deletableIds = tools.selectedIds.filter((id) => !(schooljaren ?? []).find((s) => s.id === id)?.is_current);
+  const onDelete = () => {
+    if (!deletableIds.length || !confirm(`${deletableIds.length} schooljaar/-jaren verwijderen? Dit verwijdert ook gekoppelde klassen en uitgaven.`)) return;
+    removeMany.mutate(deletableIds, { onSuccess: () => { toast(`${deletableIds.length} schooljaar/-jaren verwijderd`); tools.clear(); }, onError: () => toast("Verwijderen mislukt") });
+  };
+
   return (
     <div className="flex-col gap-4">
       <Card title={<><Icon name="calendar" size={14} /> Schooljaren-database</>} sub="Klassen, financiën en historie zijn aan deze records gekoppeld."
         action={<Btn size="sm" icon="plus" kind="primary" onClick={() => setAdding(true)}>Schooljaar toevoegen</Btn>}>
+        <BulkBar count={deletableIds.length} noun="schooljaar/-jaren" onClear={tools.clear} onDelete={onDelete} pending={removeMany.isPending} />
         <table className="table">
-          <thead><tr><th>Naam</th><th>Start</th><th>Eind</th><th>Lesdagen</th><th>Klassen</th><th>Uitgaven</th><th>Status</th><th></th></tr></thead>
+          <thead><tr>
+            <SelectTh allChecked={tools.allChecked} onToggle={tools.toggleAll} />
+            <SortTh label="Naam" k="name" sort={tools.sort} onSort={tools.toggleSort} />
+            <SortTh label="Start" k="start" sort={tools.sort} onSort={tools.toggleSort} />
+            <SortTh label="Eind" k="end" sort={tools.sort} onSort={tools.toggleSort} />
+            <SortTh label="Lesdagen" k="lesdagen" sort={tools.sort} onSort={tools.toggleSort} />
+            <SortTh label="Klassen" k="klassen" sort={tools.sort} onSort={tools.toggleSort} />
+            <SortTh label="Uitgaven" k="uitgaven" sort={tools.sort} onSort={tools.toggleSort} />
+            <th>Status</th><th></th>
+          </tr></thead>
           <tbody>
-            {(schooljaren ?? []).map((s) => (
-              <tr key={s.id}>
+            {tools.view.map((s) => (
+              <tr key={s.id} className={tools.checked.has(s.id) ? "selected" : ""}>
+                <td onClick={(e) => e.stopPropagation()}>
+                  <input type="checkbox" checked={tools.checked.has(s.id)} disabled={s.is_current} onChange={() => tools.toggleOne(s.id)} aria-label={`Selecteer schooljaar ${s.name}`} title={s.is_current ? "Het huidige schooljaar kan niet worden verwijderd" : undefined} />
+                </td>
                 <td className="font-semibold">Schooljaar {s.name}</td>
                 <td className="font-mono text-sm">{s.start_date}</td>
                 <td className="font-mono text-sm">{s.end_date}</td>

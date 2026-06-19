@@ -13,6 +13,22 @@ export function useCreateClass() {
   });
 }
 
+export function useDeleteClasses() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (ids: string[]) => {
+      if (!ids.length) return;
+      const { error } = await supabase.from("classes").delete().in("id", ids);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["classes"] });
+      qc.invalidateQueries({ queryKey: ["class-metrics"] });
+      qc.invalidateQueries({ queryKey: ["nav-counts"] });
+    },
+  });
+}
+
 export type ClassRow = Tables<"classes"> & {
   teacher: { id: string; name: string; short: string | null } | null;
   quran_teacher: { id: string; name: string; short: string | null } | null;

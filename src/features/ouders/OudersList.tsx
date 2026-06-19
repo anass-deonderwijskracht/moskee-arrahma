@@ -1,17 +1,18 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Section, Card, Avatar, Icon, Btn, Select } from "@/components/ui";
 import { Modal, Field, ModalFooter } from "@/components/ui/Modal";
 import { Loading, ErrorState } from "@/features/_shared/states";
 import { useToast } from "@/components/chrome/Toast";
-import { useOuders, useCreateOuder } from "@/data/people";
+import { useTableTools, SortTh, SelectTh, SelectTd, SearchBox, BulkBar } from "@/features/_shared/tableTools";
+import { useOuders, useCreateOuder, useDeleteOuders } from "@/data/people";
 
 export function OudersList() {
   const navigate = useNavigate();
   const toast = useToast();
   const { data, isLoading, isError, error } = useOuders();
   const createOuder = useCreateOuder();
-  const [q, setQ] = useState("");
+  const del = useDeleteOuders();
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState({ role: "Vader", name: "", phone: "", email: "", bereik: "", primary: true });
   const saveOuder = async () => {
@@ -22,12 +23,29 @@ export function OudersList() {
     } catch (e) { toast("Toevoegen mislukt: " + (e instanceof Error ? e.message : "")); }
   };
 
-  const rows = useMemo(() => {
-    const term = q.trim().toLowerCase();
-    return (data ?? []).filter((o) => !term || o.name.toLowerCase().includes(term));
-  }, [data, q]);
+  const tools = useTableTools({
+    rows: data ?? [],
+    getId: (o) => o.id,
+    search: (o, q) => o.name.toLowerCase().includes(q) || (o.email ?? "").toLowerCase().includes(q) || (o.phone ?? "").toLowerCase().includes(q),
+    sorters: {
+      name: (o) => o.name,
+      role: (o) => o.role,
+      phone: (o) => o.phone,
+      email: (o) => o.email,
+      kinderen: (o) => o.kind_ouder.length,
+      bereik: (o) => o.bereik,
+    },
+    initialSort: { key: "name", dir: "asc" },
+  });
+  const rows = tools.view;
 
   if (isError) return <ErrorState error={error} />;
+
+  const onDelete = () => {
+    const ids = tools.selectedIds;
+    if (!ids.length || !confirm(`${ids.length} ouder(s) verwijderen? De koppeling met hun kinderen wordt ook verwijderd.`)) return;
+    del.mutate(ids, { onSuccess: () => { toast(`${ids.length} ouder(s) verwijderd`); tools.clear(); }, onError: () => toast("Verwijderen mislukt") });
+  };
 
   return (
     <Section
@@ -35,24 +53,36 @@ export function OudersList() {
       sub="Eén record per persoon — broers/zussen delen dezelfde contacten"
       actions={
         <>
-          <div style={{ width: 240 }}><input className="input" placeholder="Zoek ouder…" value={q} onChange={(e) => setQ(e.target.value)} /></div>
+          <SearchBox value={tools.q} onChange={tools.setQ} placeholder="Zoek ouder…" />
           <Btn icon="plus" kind="primary" onClick={() => setAdding(true)}>Ouder toevoegen</Btn>
         </>
       }
     >
+      <BulkBar count={tools.selectedIds.length} noun="ouder(s)" onClear={tools.clear} onDelete={onDelete} pending={del.isPending} />
       <Card>
         {isLoading ? (
           <Loading />
         ) : rows.length === 0 ? (
-          <div className="empty">{q ? "Geen ouders gevonden." : "Nog geen ouders geregistreerd."}</div>
+          <div className="empty">{tools.q ? "Geen ouders gevonden." : "Nog geen ouders geregistreerd."}</div>
         ) : (
           <table className="table">
             <thead>
-              <tr><th>Ouder/voogd</th><th>Telefoon</th><th>E-mail</th><th>Kinderen</th><th>Bereikbaarheid</th><th style={{ width: 1 }}></th></tr>
+              <tr>
+                <SelectTh allChecked={tools.allChecked} onToggle={tools.toggleAll} />
+                <SortTh label="Ouder/voogd" k="name" sort={tools.sort} onSort={tools.toggleSort} />
+                <SortTh label="Telefoon" k="phone" sort={tools.sort} onSort={tools.toggleSort} />
+                <SortTh label="E-mail" k="email" sort={tools.sort} onSort={tools.toggleSort} />
+                <SortTh label="Kinderen" k="kinderen" sort={tools.sort} onSort={tools.toggleSort} />
+                <SortTh label="Bereikbaarheid" k="bereik" sort={tools.sort} onSort={tools.toggleSort} />
+                <th style={{ width: 1 }}></th>
+              </tr>
             </thead>
             <tbody>
-              {rows.map((o) => (
-                <tr key={o.id} onClick={() => navigate("/ouders/" + o.id)}>
+              {rows.map((o) => {
+                const isChecked = tools.checked.has(o.id);
+                return (
+                <tr key={o.id} onClick={() => navigate("/ouders/" + o.id)} className={isChecked ? "selected" : ""}>
+                  <SelectTd checked={isChecked} onToggle={() => tools.toggleOne(o.id)} label={`Selecteer ${o.name}`} />
                   <td>
                     <div className="flex items-center gap-3">
                       <Avatar name={o.name} size="sm" />
@@ -74,7 +104,8 @@ export function OudersList() {
                   <td className="text-sm text-muted">{o.bereik}</td>
                   <td><Icon name="chevronRight" size={14} /></td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         )}

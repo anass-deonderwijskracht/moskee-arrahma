@@ -42,6 +42,47 @@ export function useCreateKind() {
 export type Ouder = Tables<"ouders">;
 export type Kind = Tables<"kinderen">;
 
+export function useDeleteTeachers() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (ids: string[]) => {
+      if (!ids.length) return;
+      const { error } = await supabase.from("teachers").delete().in("id", ids);
+      if (error) throw error;
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["teachers"] }); qc.invalidateQueries({ queryKey: ["classes"] }); qc.invalidateQueries({ queryKey: ["nav-counts"] }); },
+  });
+}
+
+export function useDeleteOuders() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (ids: string[]) => {
+      if (!ids.length) return;
+      const { error } = await supabase.from("ouders").delete().in("id", ids);
+      if (error) throw error;
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["ouders"] }); qc.invalidateQueries({ queryKey: ["kinderen"] }); qc.invalidateQueries({ queryKey: ["nav-counts"] }); },
+  });
+}
+
+export function useDeleteKinderen() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (ids: string[]) => {
+      if (!ids.length) return;
+      const { error } = await supabase.from("kinderen").delete().in("id", ids);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["kinderen"] });
+      qc.invalidateQueries({ queryKey: ["ouders"] });
+      qc.invalidateQueries({ queryKey: ["leerlingen"] });
+      qc.invalidateQueries({ queryKey: ["nav-counts"] });
+    },
+  });
+}
+
 export function useTeachers() {
   return useQuery({
     queryKey: ["teachers"],

@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Section, Card, Btn, Icon, Badge, Pills, Avatar, type Option } from "@/components/ui";
 import { Loading, ErrorState } from "@/features/_shared/states";
 import { useToast } from "@/components/chrome/Toast";
+import { useTableTools, SortTh, SelectTh, SelectTd, SearchBox, BulkBar } from "@/features/_shared/tableTools";
 import { useEnrollments, useUpdateEnrollmentStatus, useDeleteEnrollments, type Enrollment } from "@/data/enrollments";
 import { ENROLL_COLUMNS } from "@/data/dashboard";
 import { Klassenindeler } from "@/features/klassenindeler/Klassenindeler";
@@ -10,8 +11,6 @@ import { EnrollmentSheet } from "./EnrollmentSheet";
 
 type View = "kanban" | "table" | "indeler";
 type Track = "all" | "regulier" | "hifdh";
-type SortKey = "child_name" | "track" | "age" | "preferred_lesday" | "target_class" | "status" | "date";
-type Sort = { key: SortKey; dir: "asc" | "desc" };
 
 const STATUS_TITLE: Record<string, string> = Object.fromEntries(ENROLL_COLUMNS.map((c) => [c.id, c.title]));
 
@@ -31,68 +30,39 @@ export function EnrollmentsScreen() {
   const [dropCol, setDropCol] = useState<string | null>(null);
   const [showAdd, setShowAdd] = useState(false);
   const [newTrack, setNewTrack] = useState<"regulier" | "hifdh" | null>(null);
-  const [search, setSearch] = useState("");
-  const [sort, setSort] = useState<Sort>({ key: "date", dir: "desc" });
-  const [checked, setChecked] = useState<Set<string>>(new Set());
 
   const items = data ?? [];
   const visible = useMemo(() => items.filter((i) => track === "all" || i.track === track), [items, track]);
 
-  const rows = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    let r = visible;
-    if (q) {
-      r = r.filter((it) => {
-        const p = it.enrollment_parents ?? [];
-        return [it.child_name, it.target_class, it.preferred_lesday, STATUS_TITLE[it.status], ...p.flatMap((x) => [x.name, x.phone])]
-          .some((v) => v?.toLowerCase().includes(q));
-      });
-    }
-    const dir = sort.dir === "asc" ? 1 : -1;
-    const val = (it: Enrollment): string | number => {
-      switch (sort.key) {
-        case "age": return it.age ?? -1;
-        case "date": return enrollDate(it);
-        case "child_name": return it.child_name ?? "";
-        case "track": return it.track ?? "";
-        case "preferred_lesday": return it.preferred_lesday ?? "";
-        case "target_class": return it.target_class ?? "";
-        case "status": return it.status ?? "";
-      }
-    };
-    return [...r].sort((a, b) => {
-      const av = val(a), bv = val(b);
-      if (typeof av === "number" && typeof bv === "number") return (av - bv) * dir;
-      return String(av).localeCompare(String(bv), "nl") * dir;
-    });
-  }, [visible, search, sort]);
+  const t = useTableTools({
+    rows: visible,
+    getId: (it) => it.id,
+    search: (it, q) => {
+      const p = it.enrollment_parents ?? [];
+      return [it.child_name, it.target_class, it.preferred_lesday, STATUS_TITLE[it.status], ...p.flatMap((x) => [x.name, x.phone])]
+        .some((v) => v?.toLowerCase().includes(q));
+    },
+    sorters: {
+      child_name: (it) => it.child_name,
+      track: (it) => it.track,
+      age: (it) => it.age,
+      preferred_lesday: (it) => it.preferred_lesday,
+      target_class: (it) => it.target_class,
+      status: (it) => it.status,
+      date: (it) => enrollDate(it),
+    },
+    initialSort: { key: "date", dir: "desc" },
+  });
+  const rows = t.view;
 
   if (isError) return <ErrorState error={error} />;
 
-  const toggleSort = (key: SortKey) =>
-    setSort((s) => (s.key === key ? { key, dir: s.dir === "asc" ? "desc" : "asc" } : { key, dir: key === "date" || key === "age" ? "desc" : "asc" }));
-
-  const allShownChecked = rows.length > 0 && rows.every((r) => checked.has(r.id));
-  const toggleAll = () =>
-    setChecked((prev) => {
-      const next = new Set(prev);
-      if (allShownChecked) rows.forEach((r) => next.delete(r.id));
-      else rows.forEach((r) => next.add(r.id));
-      return next;
-    });
-  const toggleOne = (id: string) =>
-    setChecked((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-
   const onDeleteSelected = () => {
-    const ids = [...checked];
+    const ids = t.selectedIds;
     if (!ids.length) return;
     if (!confirm(`${ids.length} inschrijving(en) definitief verwijderen? Dit verwijdert ook gekoppelde ouders en plaatsingen.`)) return;
     deleteEnrollments.mutate(ids, {
-      onSuccess: () => { toast(`${ids.length} inschrijving(en) verwijderd`); setChecked(new Set()); },
+      onSuccess: () => { toast(`${ids.length} inschrijving(en) verwijderd`); t.clear(); },
       onError: () => toast("Verwijderen mislukt"),
     });
   };
@@ -185,55 +155,34 @@ export function EnrollmentsScreen() {
         ) : view === "table" ? (
           <>
             <div className="flex items-center gap-3" style={{ marginBottom: 12 }}>
-              <div style={{ position: "relative", width: 280 }}>
-                <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "var(--fg-faint)", pointerEvents: "none" }}>
-                  <Icon name="search" size={15} />
-                </span>
-                <input
-                  className="input"
-                  style={{ paddingLeft: 32 }}
-                  placeholder="Zoek op naam, ouder, klas…"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                />
-              </div>
+              <SearchBox value={t.q} onChange={t.setQ} placeholder="Zoek op naam, ouder, klas…" width={280} />
               <span className="text-sm text-subtle">{rows.length} resultaten</span>
               <div style={{ flex: 1 }} />
-              {checked.size > 0 && (
-                <>
-                  <span className="text-sm font-semibold">{checked.size} geselecteerd</span>
-                  <Btn kind="ghost" size="sm" onClick={() => setChecked(new Set())}>Wissen</Btn>
-                  <Btn kind="danger" size="sm" icon="trash" onClick={onDeleteSelected} disabled={deleteEnrollments.isPending}>Verwijderen</Btn>
-                </>
-              )}
+              <BulkBar count={t.selectedIds.length} noun="inschrijving(en)" onClear={t.clear} onDelete={onDeleteSelected} pending={deleteEnrollments.isPending} />
             </div>
             <Card>
               <table className="table">
                 <thead>
                   <tr>
-                    <th style={{ width: 40 }}>
-                      <input type="checkbox" checked={allShownChecked} onChange={toggleAll} aria-label="Alles selecteren" />
-                    </th>
-                    <SortTh label="Kind" k="child_name" sort={sort} onSort={toggleSort} />
-                    <SortTh label="Traject" k="track" sort={sort} onSort={toggleSort} />
-                    <SortTh label="Leeftijd" k="age" sort={sort} onSort={toggleSort} />
-                    <SortTh label="Voorkeur lesdag" k="preferred_lesday" sort={sort} onSort={toggleSort} />
+                    <SelectTh allChecked={t.allChecked} onToggle={t.toggleAll} />
+                    <SortTh label="Kind" k="child_name" sort={t.sort} onSort={t.toggleSort} />
+                    <SortTh label="Traject" k="track" sort={t.sort} onSort={t.toggleSort} />
+                    <SortTh label="Leeftijd" k="age" sort={t.sort} onSort={t.toggleSort} />
+                    <SortTh label="Voorkeur lesdag" k="preferred_lesday" sort={t.sort} onSort={t.toggleSort} />
                     <th>Ouder/voogd 1</th>
                     <th>Ouder/voogd 2</th>
-                    <SortTh label="Doelklas" k="target_class" sort={sort} onSort={toggleSort} />
-                    <SortTh label="Status" k="status" sort={sort} onSort={toggleSort} />
-                    <SortTh label="Ingeschreven op" k="date" sort={sort} onSort={toggleSort} />
+                    <SortTh label="Doelklas" k="target_class" sort={t.sort} onSort={t.toggleSort} />
+                    <SortTh label="Status" k="status" sort={t.sort} onSort={t.toggleSort} />
+                    <SortTh label="Ingeschreven op" k="date" sort={t.sort} onSort={t.toggleSort} />
                   </tr>
                 </thead>
                 <tbody>
                   {rows.map((it) => {
                     const p = it.enrollment_parents ?? [];
-                    const isChecked = checked.has(it.id);
+                    const isChecked = t.checked.has(it.id);
                     return (
                       <tr key={it.id} onClick={() => setSelected(it)} className={isChecked ? "selected" : ""}>
-                        <td onClick={(e) => e.stopPropagation()}>
-                          <input type="checkbox" checked={isChecked} onChange={() => toggleOne(it.id)} aria-label={`Selecteer ${it.child_name}`} />
-                        </td>
+                        <SelectTd checked={isChecked} onToggle={() => t.toggleOne(it.id)} label={`Selecteer ${it.child_name}`} />
                         <td><div className="flex items-center gap-3"><Avatar name={it.child_name} size="sm" /><span className="font-semibold">{it.child_name}</span></div></td>
                         <td><Badge kind={it.track === "hifdh" ? "primary" : "info"} dot>{it.track === "hifdh" ? "Hifdh" : "Regulier"}</Badge></td>
                         <td className="num">{it.age} jr</td>
@@ -261,18 +210,5 @@ export function EnrollmentsScreen() {
       {selected && <EnrollmentSheet item={selected} onClose={() => setSelected(null)} />}
       {newTrack && <NewEnrollmentModal track={newTrack} onClose={() => setNewTrack(null)} />}
     </>
-  );
-}
-
-function SortTh({ label, k, sort, onSort }: { label: string; k: SortKey; sort: Sort; onSort: (k: SortKey) => void }) {
-  const active = sort.key === k;
-  return (
-    <th style={{ cursor: "pointer", userSelect: "none" }} onClick={() => onSort(k)}>
-      <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-        {label}
-        <Icon name={active ? (sort.dir === "asc" ? "arrowUp" : "arrowDown") : "chevronDown"} size={12}
-          style={{ opacity: active ? 1 : 0.3 }} />
-      </span>
-    </th>
   );
 }
