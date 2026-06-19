@@ -44,6 +44,30 @@ export function useUpdateEnrollmentStatus() {
   });
 }
 
+export function useDeleteEnrollments() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (ids: string[]) => {
+      if (!ids.length) return;
+      const { error } = await supabase.from("enrollments").delete().in("id", ids);
+      if (error) throw error;
+    },
+    onMutate: async (ids) => {
+      await qc.cancelQueries({ queryKey: ["enrollments-full"] });
+      const prev = qc.getQueryData<Enrollment[]>(["enrollments-full"]);
+      const set = new Set(ids);
+      qc.setQueryData<Enrollment[]>(["enrollments-full"], (old) => old?.filter((e) => !set.has(e.id)));
+      return { prev };
+    },
+    onError: (_e, _v, ctx) => { if (ctx?.prev) qc.setQueryData(["enrollments-full"], ctx.prev); },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ["enrollments-full"] });
+      qc.invalidateQueries({ queryKey: ["enrollment-counts"] });
+      qc.invalidateQueries({ queryKey: ["nav-counts"] });
+    },
+  });
+}
+
 export interface NewEnrollmentInput {
   child_name: string; age: number | null; gender: string | null; track: string;
   target_class: string | null; preferred_lesday: string | null;
