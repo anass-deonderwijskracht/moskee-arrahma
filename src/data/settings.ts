@@ -66,6 +66,15 @@ export function useSchooljaarMutations() {
     onSuccess: invalidate,
   });
 
+  const setArchived = useMutation({
+    mutationFn: async ({ id, archived }: { id: string; archived: boolean }) => {
+      // The current year is always active; archiving it would leave no current year.
+      const { error } = await supabase.from("schooljaren").update({ archived, is_current: false } as never).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: invalidate,
+  });
+
   const remove = useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase.from("schooljaren").delete().eq("id", id);
@@ -83,5 +92,5 @@ export function useSchooljaarMutations() {
     onSuccess: invalidate,
   });
 
-  return { add, setCurrent, remove, removeMany };
+  return { add, setCurrent, setArchived, remove, removeMany };
 }

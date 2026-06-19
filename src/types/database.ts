@@ -15,6 +15,30 @@ export interface Database {
         Update: { full_name?: string | null; role?: string; class_id?: string | null; email?: string | null };
         Relationships: [];
       };
+      report_periods: {
+        Row: { id: string; name: string; ord: number; archived: boolean } & Timestamps;
+        Insert: { name: string; ord?: number; archived?: boolean };
+        Update: Partial<{ name: string; ord: number; archived: boolean }>;
+        Relationships: [];
+      };
+      tests: {
+        Row: { id: string; class_id: string; report_period_id: string; name: string; grade_type: string } & Timestamps;
+        Insert: { class_id: string; report_period_id: string; name: string; grade_type: string };
+        Update: Partial<{ class_id: string; report_period_id: string; name: string; grade_type: string }>;
+        Relationships: [];
+      };
+      test_grades: {
+        Row: { id: string; test_id: string; leerling_id: string; value: string | null; updated_at: string };
+        Insert: { test_id: string; leerling_id: string; value?: string | null };
+        Update: Partial<{ test_id: string; leerling_id: string; value: string | null }>;
+        Relationships: [];
+      };
+      report_assessments: {
+        Row: { id: string; leerling_id: string; report_period_id: string; quran: string | null; gedrag: string | null; inzet: string | null; opmerking: string | null; updated_at: string };
+        Insert: { leerling_id: string; report_period_id: string; quran?: string | null; gedrag?: string | null; inzet?: string | null; opmerking?: string | null };
+        Update: Partial<{ quran: string | null; gedrag: string | null; inzet: string | null; opmerking: string | null }>;
+        Relationships: [];
+      };
       app_settings: {
         Row: {
           id: string; name: string; address: string | null; phone: string | null;

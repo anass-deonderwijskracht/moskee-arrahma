@@ -7,7 +7,8 @@ export type IconName =
   | "chevronLeft" | "arrowUp" | "arrowDown" | "check" | "x" | "dots" | "filter"
   | "more" | "menu" | "panelLeft" | "panelRight" | "star" | "download" | "upload"
   | "edit" | "trash" | "mail" | "phone" | "pin" | "eye" | "clock" | "layoutGrid"
-  | "layoutList" | "sparkles" | "activity" | "list" | "flag" | "chart" | "logout" | "copy";
+  | "layoutList" | "sparkles" | "activity" | "list" | "flag" | "chart" | "logout" | "copy"
+  | "child" | "presentation" | "archive" | "restore";
 
 const ICON_PATHS: Record<string, string> = {
   home: "M3 12L12 4l9 8M5 10v10h14V10",
@@ -54,6 +55,10 @@ const ICON_PATHS: Record<string, string> = {
   chart: "M3 3v18h18M7 14l3-3 3 3 5-5",
   logout: "M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9",
   copy: "M9 9h10v10H9V9ZM5 15H4V4h11v1",
+  child: "M12 7.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5ZM7 13l2-1a6 6 0 0 1 6 0l2 1M12 11v5M9 21l3-5 3 5",
+  presentation: "M3 4h18M4 4v10h16V4M12 14v4M9 21l3-3 3 3",
+  archive: "M4 8h16v11a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V8ZM3 4h18v4H3V4ZM10 12h4",
+  restore: "M3 12a9 9 0 1 0 2.6-6.4M3 4v4h4",
 };
 
 export function Icon({

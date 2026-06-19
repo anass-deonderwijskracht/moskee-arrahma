@@ -263,7 +263,7 @@ function SchooljarenSettings() {
   const toast = useToast();
   const { data: schooljaren, isLoading } = useSchooljaren();
   const { data: counts } = useSchooljaarCounts();
-  const { add, setCurrent, remove, removeMany } = useSchooljaarMutations();
+  const { add, setCurrent, setArchived, remove, removeMany } = useSchooljaarMutations();
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState({ name: "", code: "", start_date: "", end_date: "", lesdagen: 32 });
 
@@ -330,6 +330,8 @@ function SchooljarenSettings() {
                 <td>
                   <div className="flex gap-1">
                     {!s.is_current && <button className="btn ghost sm" title="Maak huidig" onClick={() => setCurrent.mutate(s.id, { onSuccess: () => toast(`Schooljaar ${s.name} ingesteld als huidig`) })}><Icon name="check" size={12} /></button>}
+                    {!s.is_current && !s.archived && <button className="btn ghost sm" title="Archiveren" onClick={() => setArchived.mutate({ id: s.id, archived: true }, { onSuccess: () => toast(`Schooljaar ${s.name} gearchiveerd`) })}><Icon name="archive" size={12} /></button>}
+                    {s.archived && <button className="btn ghost sm" title="Uit archief halen (weer actief)" onClick={() => setArchived.mutate({ id: s.id, archived: false }, { onSuccess: () => toast(`Schooljaar ${s.name} weer actief`) })}><Icon name="restore" size={12} /></button>}
                     {!s.is_current && <button className="btn ghost sm" title="Verwijderen" onClick={() => { if (confirm(`Schooljaar ${s.name} verwijderen? Dit verwijdert ook gekoppelde klassen en uitgaven.`)) remove.mutate(s.id, { onSuccess: () => toast("Schooljaar verwijderd") }); }}><Icon name="trash" size={12} /></button>}
                   </div>
                 </td>
