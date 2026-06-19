@@ -5,6 +5,7 @@ import { useToast } from "@/components/chrome/Toast";
 import { useSchooljaren } from "@/data/schooljaren";
 import { useClasses } from "@/data/classes";
 import { usePlacements, useUpsertPlacement, useFinalizeEnrollment, useUpdateFinalizedLeerling, useUpdateEnrollmentStatus, NIVEAUS, type Enrollment, type Placement } from "@/data/enrollments";
+import { useSetLesgeldOverride } from "@/data/tuition";
 import { ENROLL_COLUMNS } from "@/data/dashboard";
 import { EnrollmentSheet } from "@/features/enrollments/EnrollmentSheet";
 
@@ -44,6 +45,7 @@ export function Klassenindeler({ enrollments }: { enrollments: Enrollment[] }) {
   const finalize = useFinalizeEnrollment();
   const updateLeerling = useUpdateFinalizedLeerling();
   const updateStatus = useUpdateEnrollmentStatus();
+  const setOverride = useSetLesgeldOverride();
 
   const setStatus = (e: Enrollment, status: string) =>
     updateStatus.mutate({ id: e.id, status }, { onSuccess: () => toast(`${e.child_name} → ${STATUS_TITLE[status] ?? status}`) });
@@ -113,7 +115,11 @@ export function Klassenindeler({ enrollments }: { enrollments: Enrollment[] }) {
     const existing = pmap[e.id];
     try {
       const placement = existing?.id ? existing : await upsert.mutateAsync({ enrollment_id: e.id, schooljaar_id: effectiveSj });
-      await finalize.mutateAsync(placement.id);
+      const leerlingId = await finalize.mutateAsync(placement.id);
+      // Een handmatig te-betalen bedrag neemt de leerling over (anders volgt de staffel per gezin).
+      if (placement.lesgeld_verschuldigd != null && leerlingId) {
+        await setOverride.mutateAsync({ leerlingId, value: Number(placement.lesgeld_verschuldigd) });
+      }
       toast(`${e.child_name} definitief ingeschreven`);
     } catch (err) { toast("Inschrijven mislukt: " + (err instanceof Error ? err.message : "onbekend")); }
   };
@@ -208,27 +214,27 @@ export function Klassenindeler({ enrollments }: { enrollments: Enrollment[] }) {
               const isDef = !!p.definitief;
               const eligible = (classes ?? []).filter((c) => (e.track === "hifdh" ? c.track === "hifdh" : c.track !== "hifdh"));
               return (
-                <tr key={e.id} style={{ background: ROW_BG[e.status] ?? "transparent" }}>
-                  <td onClick={() => setSelected(e)} style={{ cursor: "pointer" }} title="Open inschrijving">
+                <tr key={e.id} onClick={() => setSelected(e)} style={{ background: ROW_BG[e.status] ?? "transparent", cursor: "pointer" }} title="Open inschrijving">
+                  <td>
                     <div className="font-semibold">{e.child_name}</div>
                     <div className="text-xs text-subtle font-mono">{dateTimeNL(e.submitted_at ?? e.created_at)}</div>
                   </td>
                   <td><Badge kind={STATUS_KIND[e.status] ?? "info"}>{STATUS_TITLE[e.status] ?? e.status}</Badge></td>
                   <td>{e.preferred_lesday ? <Badge kind={e.preferred_lesday === "Geen voorkeur" ? "default" : "info"}>{e.preferred_lesday}</Badge> : <span className="text-subtle">—</span>}</td>
                   <td className="num">{e.age != null ? e.age + " jr" : "—"}</td>
-                  <td>
+                  <td onClick={(ev) => ev.stopPropagation()}>
                     <Select value={p.class_id ?? ""} style={{ minWidth: 150 }} onChange={(ev) => patch(e, { class_id: ev.target.value || null })}>
                       <option value="">— kies klas —</option>
                       {eligible.map((c) => <option key={c.id} value={c.id}>{c.code} ({counts[c.id]?.concept ?? 0}/{c.capacity})</option>)}
                     </Select>
                   </td>
-                  <td>
+                  <td onClick={(ev) => ev.stopPropagation()}>
                     <Select value={p.niveau ?? ""} style={{ minWidth: 120 }} onChange={(ev) => patch(e, { niveau: ev.target.value || null })}>
                       <option value="">— kies —</option>
                       {NIVEAUS.map((n) => <option key={n} value={n}>Niveau {n}</option>)}
                     </Select>
                   </td>
-                  <td>
+                  <td onClick={(ev) => ev.stopPropagation()}>
                     <div style={{ position: "relative", minWidth: 130 }}>
                       <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "var(--fg-subtle)", fontSize: 13 }}>€</span>
                       <input className="input" type="number" min={0} step={10} placeholder="0"
@@ -236,7 +242,7 @@ export function Klassenindeler({ enrollments }: { enrollments: Enrollment[] }) {
                         style={{ paddingLeft: 22, textAlign: "right", fontFamily: "var(--mono)" }} />
                     </div>
                   </td>
-                  <td>
+                  <td onClick={(ev) => ev.stopPropagation()}>
                     <div className="flex gap-1 items-center" style={{ justifyContent: "flex-end" }}>
                       <Btn size="sm" kind={e.status === "toegezegd" ? "primary" : "default"} disabled={updateStatus.isPending} onClick={() => setStatus(e, "toegezegd")}>Toegezegd</Btn>
                       <Btn size="sm" kind={isDef ? "primary" : "default"} icon="check" disabled={(!p.class_id || !p.niveau) && !isDef || finalize.isPending}
@@ -255,7 +261,7 @@ export function Klassenindeler({ enrollments }: { enrollments: Enrollment[] }) {
         </table>
       </Card>
 
-      {selected && <EnrollmentSheet item={selected} onClose={() => setSelected(null)} />}
+      {selected && <EnrollmentSheet item={enrollments.find((e) => e.id === selected.id) ?? selected} placement={pmap[selected.id] ?? null} schooljaarId={effectiveSj} onClose={() => setSelected(null)} />}
     </div>
   );
 }

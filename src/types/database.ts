@@ -199,7 +199,7 @@ export interface Database {
       enrollment_placements: {
         Row: {
           id: string; enrollment_id: string; schooljaar_id: string; class_id: string | null;
-          niveau: string | null; lesgeld_bedrag: number | null; definitief: boolean;
+          niveau: string | null; lesgeld_bedrag: number | null; lesgeld_verschuldigd: number | null; definitief: boolean;
           leerling_id: string | null; updated_at: string;
         };
         Insert: { enrollment_id: string; schooljaar_id: string } & Partial<Database["public"]["Tables"]["enrollment_placements"]["Row"]>;

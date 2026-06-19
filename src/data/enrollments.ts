@@ -44,6 +44,31 @@ export function useUpdateEnrollmentStatus() {
   });
 }
 
+export function useUpdateEnrollment() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, patch }: { id: string; patch: Partial<Tables<"enrollments">> }) => {
+      const { error } = await supabase.from("enrollments").update(patch as never).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["enrollments-full"] });
+      qc.invalidateQueries({ queryKey: ["enrollment-counts"] });
+    },
+  });
+}
+
+export function useUpdateEnrollmentParent() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, patch }: { id: string; patch: Partial<Tables<"enrollment_parents">> }) => {
+      const { error } = await supabase.from("enrollment_parents").update(patch as never).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["enrollments-full"] }),
+  });
+}
+
 export function useDeleteEnrollments() {
   const qc = useQueryClient();
   return useMutation({
@@ -124,7 +149,7 @@ export function usePlacements(schooljaarId: string | null) {
 export function useUpsertPlacement() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (row: { enrollment_id: string; schooljaar_id: string; class_id?: string | null; niveau?: string | null; lesgeld_bedrag?: number | null }): Promise<Placement> => {
+    mutationFn: async (row: { enrollment_id: string; schooljaar_id: string; class_id?: string | null; niveau?: string | null; lesgeld_bedrag?: number | null; lesgeld_verschuldigd?: number | null }): Promise<Placement> => {
       const { data, error } = await supabase
         .from("enrollment_placements")
         .upsert(row as never, { onConflict: "enrollment_id,schooljaar_id" })

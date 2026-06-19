@@ -76,7 +76,7 @@ export function TeachersList() {
                 const isChecked = tools.checked.has(t.id);
                 return (
                   <tr key={t.id} onClick={() => setEditing(t)} className={isChecked ? "selected" : ""}>
-                    <SelectTd checked={isChecked} onToggle={() => tools.toggleOne(t.id)} label={`Selecteer ${t.name}`} />
+                    <SelectTd checked={isChecked} onToggle={(range) => tools.toggleOne(t.id, range)} label={`Selecteer ${t.name}`} />
                     <td><div className="flex items-center gap-3"><Avatar name={t.name} size="sm" /><div><div className="font-semibold">{t.name}</div><div className="text-xs text-subtle">{t.short}</div></div></div></td>
                     <td><Badge kind={role.kind}>{role.label}</Badge></td>
                     <td className="text-sm">{t.email}</td>

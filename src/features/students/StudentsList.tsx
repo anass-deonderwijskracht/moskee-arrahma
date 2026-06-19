@@ -164,7 +164,7 @@ export function StudentsList() {
                 const isChecked = tools.checked.has(l.id);
                 return (
                   <tr key={l.id} onClick={() => navigate("/students/" + l.id)} className={isChecked ? "selected" : ""}>
-                    <SelectTd checked={isChecked} onToggle={() => tools.toggleOne(l.id)} label={`Selecteer ${l.kinderen?.full_name ?? "leerling"}`} />
+                    <SelectTd checked={isChecked} onToggle={(range) => tools.toggleOne(l.id, range)} label={`Selecteer ${l.kinderen?.full_name ?? "leerling"}`} />
                     <td>
                       <div className="flex items-center gap-3">
                         <Avatar name={l.kinderen?.full_name} initials={l.kinderen?.initials ?? undefined} size="sm" />

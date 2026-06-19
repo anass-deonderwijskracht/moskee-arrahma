@@ -182,7 +182,7 @@ export function EnrollmentsScreen() {
                     const isChecked = t.checked.has(it.id);
                     return (
                       <tr key={it.id} onClick={() => setSelected(it)} className={isChecked ? "selected" : ""}>
-                        <SelectTd checked={isChecked} onToggle={() => t.toggleOne(it.id)} label={`Selecteer ${it.child_name}`} />
+                        <SelectTd checked={isChecked} onToggle={(range) => t.toggleOne(it.id, range)} label={`Selecteer ${it.child_name}`} />
                         <td><div className="flex items-center gap-3"><Avatar name={it.child_name} size="sm" /><span className="font-semibold">{it.child_name}</span></div></td>
                         <td><Badge kind={it.track === "hifdh" ? "primary" : "info"} dot>{it.track === "hifdh" ? "Hifdh" : "Regulier"}</Badge></td>
                         <td className="num">{it.age} jr</td>
@@ -207,7 +207,7 @@ export function EnrollmentsScreen() {
         )}
       </Section>
 
-      {selected && <EnrollmentSheet item={selected} onClose={() => setSelected(null)} />}
+      {selected && <EnrollmentSheet item={items.find((e) => e.id === selected.id) ?? selected} onClose={() => setSelected(null)} />}
       {newTrack && <NewEnrollmentModal track={newTrack} onClose={() => setNewTrack(null)} />}
     </>
   );

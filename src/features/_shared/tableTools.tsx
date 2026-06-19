@@ -20,6 +20,7 @@ export function useTableTools<T, K extends string>({ rows, getId, search, sorter
   const [q, setQ] = useState("");
   const [sort, setSort] = useState<Sort<K> | null>(initialSort ?? null);
   const [checked, setChecked] = useState<Set<string>>(new Set());
+  const [anchor, setAnchor] = useState<string | null>(null); // laatst aangeklikte rij voor shift-bereik
 
   const view = useMemo(() => {
     const term = q.trim().toLowerCase();
@@ -52,14 +53,28 @@ export function useTableTools<T, K extends string>({ rows, getId, search, sorter
       else ids.forEach((id) => next.add(id));
       return next;
     });
-  const toggleOne = (id: string) =>
+  // range=true (shift-klik): selecteer/deselecteer alles tussen de vorige klik en deze rij.
+  const toggleOne = (id: string, range = false) => {
     setChecked((prev) => {
       const next = new Set(prev);
+      if (range && anchor && anchor !== id) {
+        const a = ids.indexOf(anchor), b = ids.indexOf(id);
+        if (a !== -1 && b !== -1) {
+          const [lo, hi] = a < b ? [a, b] : [b, a];
+          const check = !prev.has(id); // hele bereik volgt de nieuwe staat van de aangeklikte rij
+          for (let i = lo; i <= hi; i++) {
+            if (check) next.add(ids[i]); else next.delete(ids[i]);
+          }
+          return next;
+        }
+      }
       if (next.has(id)) next.delete(id);
       else next.add(id);
       return next;
     });
-  const clear = () => setChecked(new Set());
+    if (!range || !anchor) setAnchor(id); // anker blijft staan tijdens shift-klikken zodat je kunt uitbreiden
+  };
+  const clear = () => { setChecked(new Set()); setAnchor(null); };
 
   // Selected ids restricted to currently-visible rows (filters out stale ids
   // from rows that disappeared after a search/filter change).
@@ -92,11 +107,13 @@ export function SelectTh({ allChecked, onToggle }: { allChecked: boolean; onTogg
   );
 }
 
-/** Per-row checkbox cell. Stops propagation so it doesn't trigger row navigation. */
-export function SelectTd({ checked, onToggle, label }: { checked: boolean; onToggle: () => void; label?: string }) {
+/** Per-row checkbox cell. Stops propagation so it doesn't trigger row navigation.
+ *  onToggle krijgt `range=true` mee bij een shift-klik (bereikselectie). */
+export function SelectTd({ checked, onToggle, label }: { checked: boolean; onToggle: (range: boolean) => void; label?: string }) {
   return (
     <td onClick={(e) => e.stopPropagation()}>
-      <input type="checkbox" checked={checked} onChange={onToggle} aria-label={label ?? "Rij selecteren"} />
+      <input type="checkbox" checked={checked} aria-label={label ?? "Rij selecteren"}
+        onChange={(e) => onToggle((e.nativeEvent as MouseEvent).shiftKey === true)} />
     </td>
   );
 }

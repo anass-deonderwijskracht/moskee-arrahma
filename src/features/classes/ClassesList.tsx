@@ -173,7 +173,7 @@ export function ClassesList() {
                   const isChecked = tools.checked.has(c.id);
                   return (
                     <tr key={c.id} onClick={() => navigate("/classes/" + c.id)} className={isChecked ? "selected" : ""}>
-                      <SelectTd checked={isChecked} onToggle={() => tools.toggleOne(c.id)} label={`Selecteer ${c.code}`} />
+                      <SelectTd checked={isChecked} onToggle={(range) => tools.toggleOne(c.id, range)} label={`Selecteer ${c.code}`} />
                       <td className="font-semibold">{c.code}</td>
                       <td><Badge kind={c.track === "hifdh" ? "accent" : "info"}>{c.track === "hifdh" ? "Hifdh" : "Regulier"}</Badge></td>
                       <td className="text-sm">{c.teacher?.short ?? "—"}</td>

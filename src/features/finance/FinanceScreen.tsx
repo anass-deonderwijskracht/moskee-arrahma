@@ -203,7 +203,7 @@ function IncomesTable({ incomes, schooljaarId, schooljaarName }: { incomes: Inco
             const isChecked = tools.checked.has(i.id);
             return (
               <tr key={i.id} className={isChecked ? "selected" : ""}>
-                <SelectTd checked={isChecked} onToggle={() => tools.toggleOne(i.id)} label="Selecteer inkomst" />
+                <SelectTd checked={isChecked} onToggle={(range) => tools.toggleOne(i.id, range)} label="Selecteer inkomst" />
                 <td className="font-mono text-sm">{i.date}</td>
                 <td><Badge kind="success">{i.source}</Badge></td>
                 <td>{i.description}</td>
@@ -252,7 +252,7 @@ function ExpensesTable({ expenses, schooljaarId, schooljaarName, total }: { expe
                 const isChecked = tools.checked.has(x.id);
                 return (
                   <tr key={x.id} className={isChecked ? "selected" : ""}>
-                    <SelectTd checked={isChecked} onToggle={() => tools.toggleOne(x.id)} label="Selecteer uitgave" />
+                    <SelectTd checked={isChecked} onToggle={(range) => tools.toggleOne(x.id, range)} label="Selecteer uitgave" />
                     <td className="font-mono text-sm">{x.date}</td>
                     <td><Badge kind={CAT_KIND[x.category ?? ""] ?? "default"}>{x.category}</Badge></td>
                     <td>{x.description}</td>

@@ -314,7 +314,7 @@ function SchooljarenSettings() {
             {tools.view.map((s) => (
               <tr key={s.id} className={tools.checked.has(s.id) ? "selected" : ""}>
                 <td onClick={(e) => e.stopPropagation()}>
-                  <input type="checkbox" checked={tools.checked.has(s.id)} disabled={s.is_current} onChange={() => tools.toggleOne(s.id)} aria-label={`Selecteer schooljaar ${s.name}`} title={s.is_current ? "Het huidige schooljaar kan niet worden verwijderd" : undefined} />
+                  <input type="checkbox" checked={tools.checked.has(s.id)} disabled={s.is_current} onChange={(e) => tools.toggleOne(s.id, (e.nativeEvent as MouseEvent).shiftKey === true)} aria-label={`Selecteer schooljaar ${s.name}`} title={s.is_current ? "Het huidige schooljaar kan niet worden verwijderd" : undefined} />
                 </td>
                 <td className="font-semibold">Schooljaar {s.name}</td>
                 <td className="font-mono text-sm">{s.start_date}</td>

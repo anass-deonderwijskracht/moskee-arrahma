@@ -82,7 +82,7 @@ export function OudersList() {
                 const isChecked = tools.checked.has(o.id);
                 return (
                 <tr key={o.id} onClick={() => navigate("/ouders/" + o.id)} className={isChecked ? "selected" : ""}>
-                  <SelectTd checked={isChecked} onToggle={() => tools.toggleOne(o.id)} label={`Selecteer ${o.name}`} />
+                  <SelectTd checked={isChecked} onToggle={(range) => tools.toggleOne(o.id, range)} label={`Selecteer ${o.name}`} />
                   <td>
                     <div className="flex items-center gap-3">
                       <Avatar name={o.name} size="sm" />
