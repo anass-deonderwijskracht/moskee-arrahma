@@ -3,7 +3,8 @@ import { Section, Card, Btn, Icon, Badge, Pills, Avatar, type Option } from "@/c
 import { Loading, ErrorState } from "@/features/_shared/states";
 import { useToast } from "@/components/chrome/Toast";
 import { useTableTools, SortTh, SelectTh, SelectTd, SearchBox, BulkBar } from "@/features/_shared/tableTools";
-import { useEnrollments, useUpdateEnrollmentStatus, useDeleteEnrollments, type Enrollment } from "@/data/enrollments";
+import { useEnrollments, useUpdateEnrollmentStatus, useDeleteEnrollments, usePlacements, type Enrollment } from "@/data/enrollments";
+import { useSchooljaren } from "@/data/schooljaren";
 import { ENROLL_COLUMNS } from "@/data/dashboard";
 import { Klassenindeler } from "@/features/klassenindeler/Klassenindeler";
 import { NewEnrollmentModal } from "./NewEnrollmentModal";
@@ -33,6 +34,15 @@ export function EnrollmentsScreen() {
 
   const items = data ?? [];
   const visible = useMemo(() => items.filter((i) => track === "all" || i.track === track), [items, track]);
+
+  // Schooljaar-context voor de financiën in het zijpaneel (zelfde keuze als de Klassenindeler: aankomend jaar, anders huidig).
+  const { data: schooljaren } = useSchooljaren();
+  const financeSj = useMemo(() => {
+    const na = (schooljaren ?? []).filter((s) => !s.archived);
+    const cur = na.find((s) => s.is_current);
+    return (na.find((s) => cur && s.code > cur.code) ?? cur)?.id ?? null;
+  }, [schooljaren]);
+  const { data: placements } = usePlacements(financeSj);
 
   const t = useTableTools({
     rows: visible,
@@ -207,7 +217,7 @@ export function EnrollmentsScreen() {
         )}
       </Section>
 
-      {selected && <EnrollmentSheet item={items.find((e) => e.id === selected.id) ?? selected} onClose={() => setSelected(null)} />}
+      {selected && <EnrollmentSheet key={selected.id} item={items.find((e) => e.id === selected.id) ?? selected} placement={(placements ?? {})[selected.id] ?? null} schooljaarId={financeSj} onClose={() => setSelected(null)} />}
       {newTrack && <NewEnrollmentModal track={newTrack} onClose={() => setNewTrack(null)} />}
     </>
   );

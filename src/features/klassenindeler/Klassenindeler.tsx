@@ -261,7 +261,7 @@ export function Klassenindeler({ enrollments }: { enrollments: Enrollment[] }) {
         </table>
       </Card>
 
-      {selected && <EnrollmentSheet item={enrollments.find((e) => e.id === selected.id) ?? selected} placement={pmap[selected.id] ?? null} schooljaarId={effectiveSj} onClose={() => setSelected(null)} />}
+      {selected && <EnrollmentSheet key={selected.id} item={enrollments.find((e) => e.id === selected.id) ?? selected} placement={pmap[selected.id] ?? null} schooljaarId={effectiveSj} onClose={() => setSelected(null)} />}
     </div>
   );
 }
