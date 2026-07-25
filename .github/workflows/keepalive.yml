@@ -1,0 +1,92 @@
+name: Supabase keepalive
+
+# Supabase pauzeert Free-plan projecten die over een periode van 7 dagen te
+# weinig database-activiteit zien. Een draaiende Vercel-deploy telt niet mee:
+# er moeten echte queries op de database binnenkomen. Volgens de Supabase docs
+# is "a few user requests to the database each day" genoeg om pausing te
+# voorkomen.
+#
+# Deze workflow doet 3x per dag een echte SELECT via PostgREST met de anon key.
+# RLS geeft een lege array terug (geen data lekt), maar Postgres heeft de query
+# wel degelijk uitgevoerd — en dat is wat meetelt als activiteit.
+#
+# LET OP: GitHub schakelt cron-workflows uit na 60 dagen zonder commits in de
+# repo. Als je lang niet commit: zet 'm weer aan via Actions > Supabase
+# keepalive > Enable workflow. Handmatig starten kan altijd via "Run workflow".
+
+on:
+  schedule:
+    # Verspreid over de dag; net naast het hele uur, want dan is GitHub's
+    # scheduler minder druk en worden runs minder vaak vertraagd/overgeslagen.
+    - cron: '12 6 * * *'
+    - cron: '12 13 * * *'
+    - cron: '12 19 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: supabase-keepalive
+  cancel-in-progress: false
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Ping de database
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${SUPABASE_URL:-}" ] || [ -z "${SUPABASE_ANON_KEY:-}" ]; then
+            echo "::error::Secrets SUPABASE_URL en/of SUPABASE_ANON_KEY ontbreken."
+            echo "Zet ze via: Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+
+          endpoint="${SUPABASE_URL%/}/rest/v1/app_settings?select=id&limit=1"
+          failures=0
+
+          # Twee pings per run: iets meer marge in de activiteitsmeting, en het
+          # onderscheidt een incidentele netwerkhik van een echt probleem.
+          for attempt in 1 2; do
+            body=$(mktemp)
+            code=$(curl -sS --max-time 30 -o "$body" -w '%{http_code}' \
+              -H "apikey: ${SUPABASE_ANON_KEY}" \
+              -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
+              -H "Accept: application/json" \
+              "$endpoint" || echo 000)
+
+            echo "ping $attempt: HTTP $code — $(cat "$body")"
+            rm -f "$body"
+
+            case "$code" in
+              200)
+                ;;
+              540)
+                echo "::error::HTTP 540 — het project is GEPAUZEERD. Hervat het via het Supabase dashboard (Resume project)."
+                failures=$((failures + 1))
+                ;;
+              401|403)
+                echo "::error::HTTP $code — anon key ongeldig of ingetrokken. Ververs de secret SUPABASE_ANON_KEY."
+                failures=$((failures + 1))
+                ;;
+              404)
+                echo "::error::HTTP 404 — tabel app_settings bestaat niet meer. Pas het endpoint in deze workflow aan."
+                failures=$((failures + 1))
+                ;;
+              *)
+                echo "::error::Onverwachte status $code bij het pingen van de database."
+                failures=$((failures + 1))
+                ;;
+            esac
+
+            [ "$attempt" = 1 ] && sleep 5
+          done
+
+          if [ "$failures" -gt 0 ]; then
+            exit 1
+          fi
+
+          echo "Database is bereikbaar en actief."
