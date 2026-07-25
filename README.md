@@ -85,9 +85,9 @@ scripts/          create-admin.mjs, seed.mjs (dev-only, service_role)
 
 Externe aanmeldingen (bijv. het Fillout-formulier) komen binnen via de Edge Function
 [`supabase/functions/fillout-intake`](supabase/functions/fillout-intake/index.ts).
-Die maakt een `enrollment` aan met status **wachtlijst** + twee ouders — exact de
-vorm die "Nieuwe aanmelding" in de app produceert, zodat de kaart meteen op de
-Klassenindeler/pijplijn verschijnt.
+Die maakt een `enrollment` aan met status **herinschrijving** + twee ouders — exact
+de vorm die "Nieuwe aanmelding" in de app produceert (die start op *wachtlijst*),
+zodat de kaart meteen op de Klassenindeler/pijplijn verschijnt.
 
 **Deployen** (eenmalig, via de Supabase CLI):
 ```bash

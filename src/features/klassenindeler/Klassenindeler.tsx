@@ -13,9 +13,11 @@ type Track = "all" | "regulier" | "hifdh";
 type SortKey = "date" | "name" | "status" | "lesday" | "age" | "klas" | "niveau" | "lesgeld";
 const STATUS_TITLE: Record<string, string> = Object.fromEntries(ENROLL_COLUMNS.map((c) => [c.id, c.title]));
 const STATUS_KIND: Record<string, BadgeKind> = {
-  wachtlijst: "warn", intake: "accent", toegezegd: "info", definitief: "success", afgewezen: "danger",
+  herinschrijving: "primary", wachtlijst: "warn", intake: "accent", toegezegd: "info", definitief: "success", afgewezen: "danger",
 };
-const STATUS_ORDER: Record<string, number> = { wachtlijst: 0, intake: 1, toegezegd: 2, definitief: 3, afgewezen: 4 };
+const STATUS_ORDER: Record<string, number> = { herinschrijving: 0, wachtlijst: 1, intake: 2, toegezegd: 3, definitief: 4, afgewezen: 5 };
+// Waar een status naartoe valt als je 'm weghaalt en de vorige status niet meer bekend is.
+const FALLBACK_STATUS = "wachtlijst";
 // Soft row tint per status.
 const ROW_BG: Record<string, string> = { toegezegd: "var(--info-soft)", definitief: "var(--success-soft)", afgewezen: "var(--danger-soft)" };
 
@@ -47,8 +49,20 @@ export function Klassenindeler({ enrollments }: { enrollments: Enrollment[] }) {
   const updateStatus = useUpdateEnrollmentStatus();
   const setOverride = useSetLesgeldOverride();
 
-  const setStatus = (e: Enrollment, status: string) =>
-    updateStatus.mutate({ id: e.id, status }, { onSuccess: () => toast(`${e.child_name} → ${STATUS_TITLE[status] ?? status}`) });
+  // Onthoudt per inschrijving de status van vóór de klik, zodat een tweede klik
+  // op dezelfde knop de status weer weghaalt en terugvalt op wat het was.
+  const [prevStatus, setPrevStatus] = useState<Record<string, string>>({});
+
+  const setStatus = (e: Enrollment, status: string) => {
+    const undo = e.status === status;
+    const next = undo ? (prevStatus[e.id] ?? FALLBACK_STATUS) : status;
+    if (next === e.status) return;
+    setPrevStatus((p) => {
+      const { [e.id]: _dropped, ...rest } = p;
+      return undo ? rest : { ...rest, [e.id]: e.status };
+    });
+    updateStatus.mutate({ id: e.id, status: next }, { onSuccess: () => toast(`${e.child_name} → ${STATUS_TITLE[next] ?? next}`) });
+  };
 
   const pmap = placements ?? {};
   const klassen = useMemo(() => (classes ?? []).filter((c) => track === "all" || c.track === track), [classes, track]);
@@ -244,13 +258,17 @@ export function Klassenindeler({ enrollments }: { enrollments: Enrollment[] }) {
                   </td>
                   <td onClick={(ev) => ev.stopPropagation()}>
                     <div className="flex gap-1 items-center" style={{ justifyContent: "flex-end" }}>
-                      <Btn size="sm" kind={e.status === "toegezegd" ? "primary" : "default"} disabled={updateStatus.isPending} onClick={() => setStatus(e, "toegezegd")}>Toegezegd</Btn>
+                      <Btn size="sm" kind={e.status === "toegezegd" ? "primary" : "default"} disabled={updateStatus.isPending}
+                        title={e.status === "toegezegd" ? "Klik om Toegezegd weer weg te halen" : "Toezeggen"}
+                        onClick={() => setStatus(e, "toegezegd")}>Toegezegd</Btn>
                       <Btn size="sm" kind={isDef ? "primary" : "default"} icon="check" disabled={(!p.class_id || !p.niveau) && !isDef || finalize.isPending}
                         onClick={() => { if (!isDef) doFinalize(e); }}
                         title={isDef ? "Definitief ingeschreven" : (!p.class_id || !p.niveau ? "Kies eerst klas en niveau" : "Definitief inschrijven")}>
                         Definitief
                       </Btn>
-                      <button className="att-pill" data-status={e.status === "afgewezen" ? "O" : "-"} title="Afwijzen" style={{ fontSize: 13 }} onClick={() => setStatus(e, "afgewezen")}>✗</button>
+                      <button className="att-pill" data-status={e.status === "afgewezen" ? "O" : "-"} style={{ fontSize: 13 }}
+                        title={e.status === "afgewezen" ? "Klik om Afgewezen weer weg te halen" : "Afwijzen"}
+                        onClick={() => setStatus(e, "afgewezen")}>✗</button>
                     </div>
                   </td>
                 </tr>

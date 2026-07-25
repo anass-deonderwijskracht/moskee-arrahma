@@ -6,7 +6,7 @@ export type EnrollmentParent = Tables<"enrollment_parents">;
 export type Enrollment = Tables<"enrollments"> & { enrollment_parents: EnrollmentParent[] };
 export type Placement = Tables<"enrollment_placements">;
 
-export const ENROLL_STATUSES = ["wachtlijst", "intake", "toegezegd", "definitief", "afgewezen"] as const;
+export const ENROLL_STATUSES = ["herinschrijving", "wachtlijst", "intake", "toegezegd", "definitief", "afgewezen"] as const;
 export const NIVEAUS = ["0 (beginner)", "0,5", "1", "1,5", "2"] as const;
 
 export function useEnrollments() {

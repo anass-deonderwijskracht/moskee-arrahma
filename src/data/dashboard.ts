@@ -3,7 +3,7 @@ import { supabase } from "@/lib/supabase";
 
 export interface ActivityRow { id: string; at: string; user_label: string | null; action: string | null; object: string | null; type: string | null; }
 
-const STATUSES = ["wachtlijst", "intake", "toegezegd", "definitief", "afgewezen"] as const;
+const STATUSES = ["herinschrijving", "wachtlijst", "intake", "toegezegd", "definitief", "afgewezen"] as const;
 
 export function useEnrollmentCounts() {
   return useQuery({
@@ -56,6 +56,7 @@ export function useFinanceSummary(schooljaarId: string | null) {
 }
 
 export const ENROLL_COLUMNS = [
+  { id: "herinschrijving", title: "Herinschrijving", color: "var(--primary)" },
   { id: "wachtlijst", title: "Wachtlijst", color: "var(--warn)" },
   { id: "intake", title: "Intake gepland", color: "var(--accent)" },
   { id: "toegezegd", title: "Toegezegd", color: "var(--info)" },

@@ -1,6 +1,6 @@
 // Supabase Edge Function: fillout-intake
 // Receives a Fillout "Inschrijven weekendonderwijs" webhook and creates ONE
-// enrollment per child (status 'wachtlijst'), with the two shared family
+// enrollment per child (status 'herinschrijving'), with the two shared family
 // contacts attached to each. Mirrors the admin "Nieuwe aanmelding" shape.
 //
 // The form has numbered children (1..5): child 1 uses unnumbered field names
@@ -126,7 +126,7 @@ Deno.serve(async (req: Request) => {
   for (const c of children) {
     const { data: enr, error } = await supabase.from("enrollments").insert({
       child_name: `${c.first} ${c.last}`.trim(),
-      age: c.age, birthdate: c.birthdate, gender: c.gender, track: "regulier", status: "wachtlijst",
+      age: c.age, birthdate: c.birthdate, gender: c.gender, track: "regulier", status: "herinschrijving",
       preferred_lesday: c.lesday, address: c.address, notes: c.notes || null,
       submitted_label: "via formulier",
     }).select("id").single();
