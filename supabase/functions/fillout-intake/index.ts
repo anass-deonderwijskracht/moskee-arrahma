@@ -138,5 +138,19 @@ Deno.serve(async (req: Request) => {
   }
   await supabase.from("audit_log").insert({ action: "nieuwe aanmelding via formulier", object: `${children.length} kind(eren)`, type: "enroll", user_label: "Fillout" });
 
+  // Zet de ouders meteen in Google Contacts. Bewust fire-and-forget: als Google
+  // hikt mag het formulier daar niet op stuklopen — de eerstvolgende sync haalt
+  // het vanzelf in, want de reconciliatie is idempotent.
+  const syncUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/google-contacts-sync`;
+  const syncKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const syncTask = fetch(syncUrl, {
+    method: "POST",
+    headers: { authorization: `Bearer ${syncKey}`, "content-type": "application/json" },
+    body: JSON.stringify({ dryRun: false }),
+  }).catch(() => { /* stil: staat in google_contact_sync_runs */ });
+  // @ts-ignore EdgeRuntime bestaat alleen op Supabase
+  if (typeof EdgeRuntime !== "undefined" && EdgeRuntime.waitUntil) EdgeRuntime.waitUntil(syncTask);
+  else await syncTask;
+
   return json({ ok: true, enrollments: created, count: created.length });
 });

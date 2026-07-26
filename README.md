@@ -104,6 +104,46 @@ bestand (naam kind, leeftijd/geboortejaar, geslacht, traject, voorkeur lesdag, e
 twee ouders). Pas die keywords aan zodra de exacte labels van het formulier bekend
 zijn. Het endpoint is publiek maar afgeschermd met het gedeelde secret.
 
+## Google Contacts-synchronisatie
+
+Oudercontacten worden bijgehouden in Google Contacts met een naam die het
+schooljaar en de inschrijfstatus toont: **`Mohamed Belbachir AO-26 ✅`**
+(⏳ = wachtlijst/intake, ❌ = afgewezen). Het jaartal is het startjaar van het
+schooljaar en loopt mee: schrijft een gezin zich opnieuw in, dan wordt AO-25 →
+AO-26; doet het niet mee, dan blijft het op het oude jaar staan.
+
+De code is **AO** (Arabisch onderwijs) of **HF** (hifdh). Omdat het contact de
+ouder is en een gezin kinderen in beide trajecten kan hebben, wint HF. Alleen
+het meest recente schooljaar bepaalt code én markering, zodat een afwijzing van
+twee jaar terug het huidige beeld niet stuurt.
+
+[`supabase/functions/google-contacts-sync`](supabase/functions/google-contacts-sync/index.ts)
+doet een **volledige reconciliatie**: het vergelijkt de database met Google en
+doet het verschil. Daardoor is de run idempotent en zelfherstellend. Contacten
+worden nooit verwijderd, en van de naam wordt alleen het achtervoegsel
+vervangen — handmatige correcties in Google blijven staan. Matchen gebeurt op
+telefoonnummer, genormaliseerd naar E.164, omdat dat het enige veld is dat
+betrouwbaar overeenkomt met de handmatige import.
+
+De naamlogica staat los in [`_shared/contactName.ts`](supabase/functions/_shared/contactName.ts)
+en is gedekt door 28 tests — dit is het stuk dat bij een fout honderden
+contacten tegelijk zou verminken.
+
+**Draaien**: Instellingen → Google Contacts. Eerst *Controleren* (dry-run,
+schrijft niets), dan pas *Doorvoeren*. Nieuwe aanmeldingen via het formulier
+triggeren de sync automatisch. Elke run wordt vastgelegd in
+`google_contact_sync_runs`.
+
+**Deployen + secrets**:
+```bash
+supabase functions deploy google-contacts-sync
+supabase secrets set GOOGLE_CLIENT_ID=... GOOGLE_CLIENT_SECRET=... GOOGLE_REFRESH_TOKEN=...
+```
+Het refresh-token hoort bij het Google-account waar de contacten op staan.
+Haal het op via de OAuth Playground **met "Use your own OAuth credentials"
+aangevinkt** (anders trekt Google het na 24 uur in) en zet het OAuth consent
+screen op *In production* (bij *Testing* verloopt het token na 7 dagen).
+
 ## Gebruikersbeheer & rollen (admins + docenten)
 
 In **Instellingen → Gebruikersbeheer** kan een admin gebruikers toevoegen en

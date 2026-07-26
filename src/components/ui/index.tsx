@@ -87,7 +87,9 @@ export function Card({
           {action}
         </div>
       )}
-      {children}
+      {/* Eigen wrapper zodat brede inhoud (tabellen) op mobiel binnen de kaart
+          horizontaal kan scrollen zonder de kaartkop mee te nemen. */}
+      <div className="card-body">{children}</div>
     </div>
   );
 }
@@ -171,11 +173,13 @@ export function MultiSelect({
 
   useEffect(() => {
     if (!open) return;
-    const onDown = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    // pointerdown dekt muis én touch; mousedown alleen wordt op touch pas
+    // gesynthetiseerd ná de tik en sluit dan te laat.
+    const onDown = (e: Event) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
-    document.addEventListener("mousedown", onDown);
+    document.addEventListener("pointerdown", onDown);
     document.addEventListener("keydown", onKey);
-    return () => { document.removeEventListener("mousedown", onDown); document.removeEventListener("keydown", onKey); };
+    return () => { document.removeEventListener("pointerdown", onDown); document.removeEventListener("keydown", onKey); };
   }, [open]);
 
   const selected = new Set(value);

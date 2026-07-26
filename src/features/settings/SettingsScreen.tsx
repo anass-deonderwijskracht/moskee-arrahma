@@ -12,6 +12,7 @@ import { useClasses } from "@/data/classes";
 import { useUsers, useCreateUser, useUpdateUser, useDeleteUser, type AppUser } from "@/data/users";
 import { useAuditLog, useSaveSettings, useSchooljaarCounts, useSchooljaarMutations } from "@/data/settings";
 import { useTableTools, SortTh, SelectTh, BulkBar } from "@/features/_shared/tableTools";
+import { GoogleContactsSettings } from "./GoogleContactsSettings";
 
 function downloadFile(name: string, content: string, mime: string) {
   const blob = new Blob([content], { type: mime });
@@ -29,11 +30,12 @@ function toCsv(rows: Record<string, unknown>[]): string {
   return [headers.join(";"), ...rows.map((r) => headers.map((h) => esc(r[h])).join(";"))].join("\n");
 }
 
-type SectionId = "general" | "users" | "schooljaren" | "audit" | "data";
+type SectionId = "general" | "users" | "schooljaren" | "contacts" | "audit" | "data";
 const SECTIONS: { id: SectionId; label: string; icon: IconName }[] = [
   { id: "general", label: "Algemeen", icon: "settings" },
   { id: "users", label: "Gebruikersbeheer", icon: "user" },
   { id: "schooljaren", label: "Schooljaren", icon: "calendar" },
+  { id: "contacts", label: "Google Contacts", icon: "phone" },
   { id: "audit", label: "Audit log", icon: "activity" },
   { id: "data", label: "Data & export", icon: "download" },
 ];
@@ -42,7 +44,7 @@ export function SettingsScreen() {
   const [section, setSection] = useState<SectionId>("general");
   return (
     <Section title="Instellingen" sub="Beheer organisatie, schooljaren en data">
-      <div style={{ display: "grid", gridTemplateColumns: "200px 1fr", gap: 24 }}>
+      <div className="grid-2" style={{ gridTemplateColumns: "200px 1fr", gap: 24 }}>
         <div className="flex-col gap-1">
           {SECTIONS.map((s) => (
             <button key={s.id} className={"sidebar-link " + (section === s.id ? "active" : "")} onClick={() => setSection(s.id)}>
@@ -54,6 +56,7 @@ export function SettingsScreen() {
           {section === "general" && <GeneralSettings />}
           {section === "users" && <UserManagement />}
           {section === "schooljaren" && <SchooljarenSettings />}
+          {section === "contacts" && <GoogleContactsSettings />}
           {section === "audit" && <AuditLog />}
           {section === "data" && <DataExport />}
         </div>
@@ -332,7 +335,7 @@ function SchooljarenSettings() {
 
       {adding && (
         <Card title="Nieuw schooljaar" action={<button className="btn ghost sm" onClick={() => setAdding(false)}><Icon name="x" size={14} /></button>}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 16 }}>
+          <div className="grid-auto tight">
             <div className="field"><label>Naam (bijv. 2027/28)</label><input className="input" placeholder="2027/28" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} /></div>
             <div className="field"><label>Startdatum</label><input className="input" type="date" value={form.start_date} onChange={(e) => setForm((f) => ({ ...f, start_date: e.target.value }))} /></div>
             <div className="field"><label>Einddatum</label><input className="input" type="date" value={form.end_date} onChange={(e) => setForm((f) => ({ ...f, end_date: e.target.value }))} /></div>

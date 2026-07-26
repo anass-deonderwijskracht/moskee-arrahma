@@ -71,6 +71,27 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["tuition_tiers"]["Row"]>;
         Relationships: [];
       };
+      google_contacts: {
+        Row: {
+          phone_e164: string; resource_name: string; etag: string | null;
+          display_name: string | null; synced_at: string;
+        } & Timestamps;
+        Insert: { phone_e164: string; resource_name: string } & Partial<
+          Database["public"]["Tables"]["google_contacts"]["Row"]
+        >;
+        Update: Partial<Database["public"]["Tables"]["google_contacts"]["Row"]>;
+        Relationships: [];
+      };
+      google_contact_sync_runs: {
+        Row: {
+          id: string; started_at: string; finished_at: string | null; dry_run: boolean; ok: boolean;
+          created: number; updated: number; unchanged: number; skipped: number; conflicts: number;
+          error: string | null; plan: unknown; run_by: string | null; run_by_name: string | null;
+        };
+        Insert: Partial<Database["public"]["Tables"]["google_contact_sync_runs"]["Row"]>;
+        Update: Partial<Database["public"]["Tables"]["google_contact_sync_runs"]["Row"]>;
+        Relationships: [];
+      };
       teacher_payouts: {
         Row: {
           id: string; teacher_id: string; schooljaar_id: string; period: string;
