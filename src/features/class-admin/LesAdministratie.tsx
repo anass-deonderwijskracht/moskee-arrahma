@@ -146,6 +146,13 @@ export function LesAdministratie({ leerlingen, lesson, lessons, setLessonId }: {
           </div>
         </div>
 
+        {/* De letters A/L/Z/O werden alleen in een tooltip uitgelegd — op een
+            touchscreen verschijnt die nooit. */}
+        <div className="text-xs text-subtle mb-3" style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+          {ATT.map((o) => <span key={o.v}><b style={{ color: "var(--fg-muted)" }}>{o.lbl}</b> = {o.title}</span>)}
+          <span><b style={{ color: "var(--fg-muted)" }}>✗</b> = materialen niet in orde</span>
+        </div>
+
         {isLoading ? <Loading /> : (
           <table className="table" style={{ borderRadius: 8, overflow: "hidden" }}>
             <thead>

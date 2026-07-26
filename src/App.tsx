@@ -1,3 +1,4 @@
+import { lazy } from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/features/auth/AuthProvider";
 import { ProtectedRoute } from "@/features/auth/ProtectedRoute";
@@ -17,14 +18,17 @@ import { TeachersList } from "@/features/teachers/TeachersList";
 import { TeacherDetail } from "@/features/teachers/TeacherDetail";
 import { TasksBoard } from "@/features/tasks/TasksBoard";
 import { StudentsList } from "@/features/students/StudentsList";
-import { LeerlingDetail } from "@/features/students/LeerlingDetail";
 import { ClassesList } from "@/features/classes/ClassesList";
-import { ClassDetail } from "@/features/classes/ClassDetail";
-import { EnrollmentsScreen } from "@/features/enrollments/EnrollmentsScreen";
-import { FinanceScreen } from "@/features/finance/FinanceScreen";
-import { PlanningScreen } from "@/features/planning/PlanningScreen";
-import { SettingsScreen } from "@/features/settings/SettingsScreen";
-import { AdminToetsen } from "@/features/admin-tests/AdminToetsen";
+
+// De zwaarste schermen apart laden, zodat de eerste lading op een mobiel
+// netwerk niet de hele app hoeft binnen te halen.
+const LeerlingDetail = lazy(() => import("@/features/students/LeerlingDetail").then((m) => ({ default: m.LeerlingDetail })));
+const ClassDetail = lazy(() => import("@/features/classes/ClassDetail").then((m) => ({ default: m.ClassDetail })));
+const EnrollmentsScreen = lazy(() => import("@/features/enrollments/EnrollmentsScreen").then((m) => ({ default: m.EnrollmentsScreen })));
+const FinanceScreen = lazy(() => import("@/features/finance/FinanceScreen").then((m) => ({ default: m.FinanceScreen })));
+const PlanningScreen = lazy(() => import("@/features/planning/PlanningScreen").then((m) => ({ default: m.PlanningScreen })));
+const SettingsScreen = lazy(() => import("@/features/settings/SettingsScreen").then((m) => ({ default: m.SettingsScreen })));
+const AdminToetsen = lazy(() => import("@/features/admin-tests/AdminToetsen").then((m) => ({ default: m.AdminToetsen })));
 
 export function App() {
   return (

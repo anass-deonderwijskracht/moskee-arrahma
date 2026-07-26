@@ -98,7 +98,15 @@
 .modal { width: 100%; max-width: 460px; background: var(--bg-elev); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); padding: 24px; animation: toastIn 0.18s ease-out; }
 @media (max-width: 900px) {
   .modal-overlay { padding: 14px; }
-  .modal { padding: 18px; max-height: calc(100vh - 28px); overflow-y: auto; }
+  .modal { padding: 18px; max-height: calc(100dvh - 28px); overflow-y: auto; }
+
+  /* Zijpaneel vult het scherm; er blijft geen overlay-strook over om op te
+     tikken, dus de sluitknop moet ruim en zichtbaar zijn. */
+  .sheet { width: 100%; }
+  .sheet > div {
+    padding: calc(16px + env(safe-area-inset-top)) 16px calc(16px + env(safe-area-inset-bottom)) !important;
+  }
+  .sheet [aria-label="Sluiten"] { min-width: 44px; min-height: 44px; justify-content: center; }
 }
 
 /* --- Dropdown menu --- */

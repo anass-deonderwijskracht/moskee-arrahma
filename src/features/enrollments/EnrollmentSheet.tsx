@@ -137,7 +137,7 @@ export function EnrollmentSheet({ item, onClose, schooljaarId, placement }: {
           </div>
 
           {/* ---- Gegevens (inline bewerkbaar) ---- */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 20 }}>
+          <div className="grid-2" style={{ gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 20 }}>
             <div><label style={lbl}>Leeftijd</label><input className="input" type="number" defaultValue={item.age ?? ""} onBlur={(e) => { const v = e.target.value.trim(); const n = v === "" ? null : parseInt(v) || null; if (n !== item.age) save({ age: n }); }} /></div>
             <div><label style={lbl}>Geboortedatum</label><input className="input" type="date" defaultValue={item.birthdate ?? ""} onBlur={(e) => saveText("birthdate", e.target.value)} /></div>
             <div><label style={lbl}>Geslacht</label><Select defaultValue={item.gender ?? ""} onChange={(e) => save({ gender: e.target.value || null })}><option value="">—</option><option value="m">Jongen</option><option value="f">Meisje</option></Select></div>
@@ -158,7 +158,7 @@ export function EnrollmentSheet({ item, onClose, schooljaarId, placement }: {
           {schooljaarId && (
             <div style={{ marginBottom: 20 }}>
               <div className="text-xs text-subtle mb-2 font-semibold" style={{ textTransform: "uppercase", letterSpacing: "0.05em" }}>Financiën</div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <div className="grid-2" style={{ gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                 <div>
                   <label style={lbl}>Te betalen {overridden ? "(handmatig)" : "(staffel)"}</label>
                   <div style={{ position: "relative" }}>
@@ -199,7 +199,7 @@ export function EnrollmentSheet({ item, onClose, schooljaarId, placement }: {
             <div className="flex-col gap-3">
               {(item.enrollment_parents ?? []).map((p) => (
                 <div key={p.id} style={{ padding: 12, background: "var(--bg-sunken)", borderRadius: 10, border: "1px solid var(--border)" }}>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                  <div className="grid-2" style={{ gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                     <div><label style={lbl}>Naam</label><input className="input" defaultValue={p.name ?? ""} onBlur={(e) => { if ((p.name ?? "") !== e.target.value) saveParent(p.id, { name: e.target.value }); }} /></div>
                     <div><label style={lbl}>Rol</label><input className="input" defaultValue={p.role ?? ""} onBlur={(e) => { if ((p.role ?? "") !== e.target.value) saveParent(p.id, { role: e.target.value }); }} /></div>
                     <div><label style={lbl}>Telefoon</label><input className="input" defaultValue={p.phone ?? ""} onBlur={(e) => { if ((p.phone ?? "") !== e.target.value) saveParent(p.id, { phone: e.target.value }); }} /></div>

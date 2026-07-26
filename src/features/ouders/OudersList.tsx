@@ -4,7 +4,7 @@ import { Section, Card, Avatar, Icon, Btn, Select } from "@/components/ui";
 import { Modal, Field, ModalFooter } from "@/components/ui/Modal";
 import { Loading, ErrorState } from "@/features/_shared/states";
 import { useToast } from "@/components/chrome/Toast";
-import { useTableTools, SortTh, SelectTh, SelectTd, SearchBox, BulkBar, EditToggle, EditableTd } from "@/features/_shared/tableTools";
+import { useTableTools, SortTh, SelectTh, SelectTd, SearchBox, BulkBar, EditToggle, EditableTd, useEditMode } from "@/features/_shared/tableTools";
 import { useOuders, useCreateOuder, useDeleteOuders, useUpdateOuder, type Ouder } from "@/data/people";
 
 const ROLLEN = ["Vader", "Moeder", "Voogd"];
@@ -16,7 +16,7 @@ export function OudersList() {
   const createOuder = useCreateOuder();
   const del = useDeleteOuders();
   const update = useUpdateOuder();
-  const [editing, setEditing] = useState(false);
+  const [editing, toggleEditing] = useEditMode();
   const [adding, setAdding] = useState(false);
   const save = (id: string, patch: Partial<Ouder>) =>
     update.mutate({ id, patch }, { onError: () => toast("Opslaan mislukt") });
@@ -60,7 +60,7 @@ export function OudersList() {
       actions={
         <>
           <SearchBox value={tools.q} onChange={tools.setQ} placeholder="Zoek ouder…" />
-          <EditToggle editing={editing} onToggle={() => setEditing((v) => !v)} />
+          <EditToggle editing={editing} onToggle={toggleEditing} />
           <Btn icon="plus" kind="primary" onClick={() => setAdding(true)}>Ouder toevoegen</Btn>
         </>
       }

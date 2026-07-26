@@ -53,7 +53,7 @@ export function KlassenOverzichtKanban({ classes, schooljaarId }: { classes: Cla
   if (isLoading) return <Loading />;
 
   return (
-    <div className="kanban" style={{ gridTemplateColumns: `repeat(${classes.length}, minmax(280px, 1fr))`, height: "auto", maxHeight: "calc(100vh - 240px)" }}>
+    <div className="kanban wide" style={{ height: "auto", maxHeight: "calc(100dvh - 240px)" }}>
       {classes.map((c) => {
         const ss = byClass.get(c.id) ?? [];
         const cm = metricsMap?.[c.id];
@@ -62,7 +62,7 @@ export function KlassenOverzichtKanban({ classes, schooljaarId }: { classes: Cla
         const ages = ss.map((s) => (s.birth_year ? currentYear - s.birth_year : null)).filter((a): a is number => a != null);
         const avgAge = ages.length ? ages.reduce((a, b) => a + b, 0) / ages.length : 0;
         return (
-          <div key={c.id} className="kcol" style={{ minWidth: 280 }}>
+          <div key={c.id} className="kcol">
             <div className="kcol-head" style={{ flexDirection: "column", alignItems: "stretch", gap: 10, padding: "4px 4px 12px" }}>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2"><Badge kind={(c.color as BadgeKind) ?? "primary"}>{c.code}</Badge>{c.track === "hifdh" && <Badge kind="primary" dot>Hifdh</Badge>}</div>

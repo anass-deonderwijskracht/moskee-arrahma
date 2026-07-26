@@ -55,7 +55,7 @@ export function LeerlingDetail() {
             <Badge>{age != null ? age + " jaar" : ""} · {kinderen?.gender === "f" ? "♀" : "♂"}</Badge>
             <Badge>{l.schooljaren?.name}</Badge>
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0,1fr))", gap: 24, marginTop: 16 }}>
+          <div className="grid-auto" style={{ marginTop: 16 }}>
             {[
               ["Aanwezigheid", pct(m?.attendance_pct), (m?.attendance_pct ?? 0) * 100, 100, "Uit les-administratie"],
               ["Arabisch huiswerk", pct(m?.arabic_homework_pct), (m?.arabic_homework_pct ?? 0) * 100, 100, "Uit les-administratie"],
@@ -231,7 +231,7 @@ function LeerlingToetsen({ leerlingId }: { leerlingId: string }) {
     <div className="flex-col gap-4">
       {(data ?? []).filter(filled).map((r) => (
         <Card key={r.period.id} title={r.period.name} sub="Beoordelingen">
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 24, fontSize: 13, marginBottom: r.tests.length ? 16 : 0 }}>
+          <div className="grid-auto" style={{ fontSize: 13, marginBottom: r.tests.length ? 16 : 0 }}>
             {([["Quran", r.assessment?.quran], ["Gedrag", r.assessment?.gedrag], ["Inzet", r.assessment?.inzet]] as const).map(([k, v]) => (
               <div key={k}><div className="text-xs text-subtle mb-1">{k}</div><div className="font-semibold">{v || "—"}</div></div>
             ))}
@@ -301,7 +301,7 @@ function InfoTab({ detail, age }: { detail: ReturnType<typeof useLeerlingDetail>
   return (
     <div className="flex-col gap-4">
       <Card title="Leerling-gegevens">
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 24, fontSize: 13 }}>
+        <div className="grid-auto" style={{ fontSize: 13 }}>
           {([
             ["Volledige naam", k?.full_name],
             ["Leerlingnummer", l.leerlingnummer],

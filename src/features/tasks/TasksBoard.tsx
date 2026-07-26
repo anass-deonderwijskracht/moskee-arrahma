@@ -4,6 +4,7 @@ import { Modal, Field, ModalFooter } from "@/components/ui/Modal";
 import { Loading, ErrorState } from "@/features/_shared/states";
 import { useToast } from "@/components/chrome/Toast";
 import { useUsers } from "@/data/users";
+import { CardMove, EmptyCol } from "@/features/_shared/kanban";
 import { useTasks, useCreateTask, useUpdateTask, TASK_COLUMNS, PRIORITIES, PRIORITY_LABEL, type Task } from "@/data/tasks";
 import { TaskSheet } from "./TaskSheet";
 
@@ -50,14 +51,15 @@ export function TasksBoard() {
   const shown = who === "" ? all : who === "none" ? all.filter((t) => !t.assignee_id) : all.filter((t) => t.assignee_id === who);
   const selected = all.find((t) => t.id === selectedId) ?? null;
 
+  const moveTo = (id: string, status: string) => {
+    const t = all.find((x) => x.id === id);
+    if (!t || t.status === status) return;
+    update.mutate({ id, patch: { status } }, { onError: () => toast("Verplaatsen mislukt") });
+    toast(`“${t.title}” → ${TASK_COLUMNS.find((c) => c.id === status)?.title}`);
+  };
+
   const onDrop = (status: string) => {
-    if (dragId) {
-      const t = all.find((x) => x.id === dragId);
-      if (t && t.status !== status) {
-        update.mutate({ id: dragId, patch: { status } }, { onError: () => toast("Verplaatsen mislukt") });
-        toast(`“${t.title}” → ${TASK_COLUMNS.find((c) => c.id === status)?.title}`);
-      }
-    }
+    if (dragId) moveTo(dragId, status);
     setDragId(null); setDropCol(null);
   };
 
@@ -106,7 +108,7 @@ export function TasksBoard() {
         {isLoading ? (
           <Loading />
         ) : (
-          <div className="kanban" style={{ height: "calc(100vh - 240px)" }}>
+          <div className="kanban fill">
             {TASK_COLUMNS.map((col) => {
               const colTasks = shown.filter((t) => t.status === col.id);
               return (
@@ -123,13 +125,10 @@ export function TasksBoard() {
                       <TaskCard key={t.id} task={t} assignee={t.assignee_id ? userName.get(t.assignee_id) : undefined}
                         dragging={dragId === t.id}
                         onDragStart={() => setDragId(t.id)} onDragEnd={() => setDragId(null)}
+                        onMove={(status) => moveTo(t.id, status)}
                         onOpen={() => setSelectedId(t.id)} />
                     ))}
-                    {colTasks.length === 0 && (
-                      <div style={{ padding: "20px 10px", textAlign: "center", color: "var(--fg-faint)", fontSize: 12 }}>
-                        Sleep een kaart hierheen
-                      </div>
-                    )}
+                    {colTasks.length === 0 && <EmptyCol />}
                   </div>
                 </div>
               );
@@ -183,9 +182,9 @@ export function TasksBoard() {
   );
 }
 
-function TaskCard({ task, assignee, dragging, onDragStart, onDragEnd, onOpen }: {
+function TaskCard({ task, assignee, dragging, onDragStart, onDragEnd, onMove, onOpen }: {
   task: Task; assignee?: string; dragging: boolean;
-  onDragStart: () => void; onDragEnd: () => void; onOpen: () => void;
+  onDragStart: () => void; onDragEnd: () => void; onMove: (status: string) => void; onOpen: () => void;
 }) {
   const subs = task.task_subtasks ?? [];
   const done = subs.filter((s) => s.done).length;
@@ -207,6 +206,7 @@ function TaskCard({ task, assignee, dragging, onDragStart, onDragEnd, onOpen }: 
         )}
         {due && task.status !== "done" && <Badge kind={due.kind}>{due.text}</Badge>}
       </div>
+      <CardMove columns={TASK_COLUMNS} current={task.status} onMove={onMove} />
     </div>
   );
 }

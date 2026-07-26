@@ -30,7 +30,7 @@ export function OuderDetail() {
             <Badge kind="primary">{o.role}</Badge>
             {o.primary && <Badge kind="success" dot>Primair contact</Badge>}
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0,1fr))", gap: 24 }}>
+          <div className="grid-auto">
             <div><div className="text-xs text-subtle">Telefoon</div><div className="font-mono" style={{ fontSize: 15, fontWeight: 500 }}>{o.phone ?? "—"}</div></div>
             <div><div className="text-xs text-subtle">E-mail</div><div style={{ fontSize: 14, fontWeight: 500 }}>{o.email ?? "—"}</div></div>
             <div><div className="text-xs text-subtle">Bereikbaarheid</div><div style={{ fontSize: 14, fontWeight: 500 }}>{o.bereik ?? "—"}</div></div>

@@ -132,6 +132,9 @@ a { color: inherit; text-decoration: none; }
   grid-template-columns: var(--sidebar-w) 1fr;
   min-height: 100vh;
   height: 100vh;
+  /* dvh volgt de in-/uitklappende adresbalk op mobiel; vh blijft de fallback. */
+  min-height: 100dvh;
+  height: 100dvh;
   overflow: hidden;
 }
 .app[data-collapsed="true"] { grid-template-columns: var(--sidebar-collapsed-w) 1fr; }
@@ -511,13 +514,19 @@ select:not(.select):not([multiple]) {
 }
 
 /* === Kanban === */
+/* Het aantal kolommen volgt de inhoud (grid-auto-flow), niet een vast getal —
+   de pijplijn heeft er vijf, het takenbord drie, klassen een variabel aantal. */
 .kanban {
   display: grid;
-  grid-template-columns: repeat(5, minmax(240px, 1fr));
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(240px, 1fr);
   gap: 14px;
   height: 100%;
   overflow-x: auto;
 }
+.kanban.wide { grid-auto-columns: minmax(280px, 1fr); }
+/* Bord vult de pagina; dvh volgt de in-/uitklappende adresbalk op mobiel. */
+.kanban.fill { height: calc(100vh - 240px); height: calc(100dvh - 240px); }
 .kcol {
   background: var(--bg-sunken);
   border: 1px solid var(--border);
@@ -575,6 +584,24 @@ select:not(.select):not([multiple]) {
 .kcard .meta b { color: var(--fg-muted); font-weight: 500; }
 .kcard .row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .kcol.drop-target { background: var(--primary-soft); border-style: dashed; border-color: var(--primary); }
+
+/* Statuskiezer op de kaart — het touch-alternatief voor slepen. HTML5
+   drag-and-drop vuurt geen events op een touchscreen, dus zonder dit is een
+   kaart daar onverplaatsbaar. Alleen zichtbaar op mobiel. */
+.kcard-move { display: none; }
+@media (max-width: 900px) {
+  .kcard-move {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 2px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
+  }
+  .kcard-move > span { font-size: 11.5px; color: var(--fg-subtle); flex-shrink: 0; }
+  .kcard-move > .select { flex: 1; min-width: 0; }
+  .kcard { cursor: default; }
+}
 
 /* === Calendar === */
 .cal {
@@ -749,6 +776,11 @@ select:not(.select):not([multiple]) {
 .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .grid-2 { display: grid; grid-template-columns: 2fr 1fr; gap: var(--gap-lg); }
 .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--gap); }
+/* Kolommen die vanzelf inklappen zodra de ruimte op is — geen media-query
+   nodig en niet te overrulen door een inline breedte. Voor rijen gelijkwaardige
+   gegevensvelden (detailkoppen, samenvattingen). */
+.grid-auto { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 24px; }
+.grid-auto.tight { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 16px; }
 @media (max-width: 1100px) { .grid-2 { grid-template-columns: 1fr; } .grid-3 { grid-template-columns: 1fr; } }
 
 /* Section header */
@@ -928,9 +960,21 @@ select:not(.select):not([multiple]) {
 .mobile-bar { display: none; }
 .nav-backdrop { display: none; }
 
+/* Tekst die per schermgrootte verschilt, zonder JS. */
+.only-mobile { display: none; }
+
 /* Responsive */
 @media (max-width: 900px) {
   :root { --pad-page: 16px; }
+
+  .only-mobile { display: initial; }
+  .only-desktop { display: none; }
+
+  /* Zo'n twintig plekken zetten inline een eigen gridTemplateColumns op een
+     .grid-2/.grid-3 en overrulen daarmee de 1100px-regel; inline weegt nu
+     eenmaal zwaarder dan een stylesheet. !important is hier het enige middel
+     om die blokken op een telefoon toch in één kolom te krijgen. */
+  .grid-2, .grid-3 { grid-template-columns: 1fr !important; }
 
   /* Single column; sidebar becomes an off-canvas drawer. */
   .app,
@@ -967,7 +1011,10 @@ select:not(.select):not([multiple]) {
     gap: 8px;
     height: 52px;
     flex-shrink: 0;
-    padding: 0 12px;
+    /* Op het startscherm loopt de pagina onder de statusbalk/notch door
+       (viewport-fit=cover), dus de balk schuift mee omlaag. */
+    height: calc(52px + env(safe-area-inset-top));
+    padding: env(safe-area-inset-top) 12px 0;
     border-bottom: 1px solid var(--border);
     background: var(--bg-elev);
     position: sticky;
@@ -976,9 +1023,48 @@ select:not(.select):not([multiple]) {
   }
   .mobile-bar-title { font-weight: 600; font-size: 15px; letter-spacing: -0.01em; }
 
-  /* Keep the page from scrolling sideways; tables scroll inside their card. */
-  .page { overflow-x: hidden; }
-  .card:has(.table) { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-  .card .table { min-width: 560px; }
+  /* Keep the page from scrolling sideways; brede inhoud scrollt binnen de
+     kaart — de kaartkop blijft staan omdat alleen .card-body scrollt. */
+  .page {
+    overflow-x: hidden;
+    /* Ruimte voor de home-indicator onderaan iPhones zonder thuisknop. */
+    padding-bottom: calc(var(--pad-page) + env(safe-area-inset-bottom));
+  }
+  .sidebar { padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom); }
+  .toast-stack { bottom: calc(20px + env(safe-area-inset-bottom)); }
+  .card-body { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .card-body .table { min-width: 560px; }
   .table th, .table td { white-space: nowrap; }
+
+  /* iOS Safari zoomt in zodra een veld onder 16px focus krijgt — en zoomt niet
+     terug uit. Alle formulierbesturing gaat daarom op mobiel naar 16px. */
+  .input, .textarea, .select { font-size: 16px; }
+
+  /* Aanraakvlakken naar de 44px-richtlijn. Alleen mobiel: de desktopdichtheid
+     blijft ongemoeid. */
+  .btn, .input, .select { min-height: 44px; }
+  .btn.sm { min-height: 36px; padding: 7px 12px; font-size: 13px; }
+  .textarea { min-height: 66px; }
+  .pill { min-height: 38px; }
+  input[type="checkbox"], input[type="radio"] { width: 20px; height: 20px; }
+  /* Icoonknoppen die inline een kleinere padding forceren, toch aantikbaar. */
+  .btn.ghost.sm { min-width: 36px; justify-content: center; }
+
+  /* De instellingen-knop botste met de toaststapel rechtsonder. */
+  .tweaks-fab { bottom: auto; top: 8px; right: 10px; }
+  .tweaks-panel { bottom: auto; top: 56px; right: 10px; max-width: calc(100vw - 20px); }
+
+  /* Filters en zoekvelden staan op vaste px-breedtes; die mogen nooit breder
+     zijn dan het scherm. */
+  .section-actions > * { max-width: 100%; }
+
+  /* Kanban: kolommen onder elkaar in plaats van een schuifbord van 1250px. */
+  .kanban, .kanban.wide {
+    grid-auto-flow: row;
+    grid-auto-columns: auto;
+    overflow-x: visible;
+  }
+  .kanban.fill { height: auto; }
+  .kcol { min-width: 0; max-height: none; }
+  .kcol-body { overflow-y: visible; }
 }

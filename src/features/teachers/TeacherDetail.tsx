@@ -57,7 +57,7 @@ export function TeacherDetail() {
               ? <Badge kind="warn" dot>Uurtarief onbekend</Badge>
               : <Badge kind="success" dot>{fmtRate(t.uurtarief)}</Badge>}
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0,1fr))", gap: 24 }}>
+          <div className="grid-auto">
             <div><div className="text-xs text-subtle">Uurtarief</div><div className="num" style={{ fontSize: 15, fontWeight: 600 }}>{fmtRate(t.uurtarief)}</div></div>
             <div><div className="text-xs text-subtle">Telefoon</div><div className="font-mono" style={{ fontSize: 15, fontWeight: 500 }}>{t.phone ?? "—"}</div></div>
             <div><div className="text-xs text-subtle">E-mail</div><div style={{ fontSize: 14, fontWeight: 500 }}>{t.email ?? "—"}</div></div>

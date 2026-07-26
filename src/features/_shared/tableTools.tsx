@@ -2,6 +2,7 @@
 // matching UI atoms. One source of truth so every list table behaves identically.
 import { useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import { Btn, Icon } from "@/components/ui";
+import { useIsMobile } from "@/components/chrome/useIsMobile";
 
 export type SortDir = "asc" | "desc";
 export type Sort<K extends string = string> = { key: K; dir: SortDir };
@@ -137,13 +138,25 @@ export function SearchBox({ value, onChange, placeholder, width = 240 }: {
 // invoervelden die automatisch opslaan zodra je ze verlaat.
 // ---------------------------------------------------------------------------
 
-/** Zet de tabel in of uit de bewerkstand. Hoort in de `actions` van de Section. */
+/** Zet de tabel in of uit de bewerkstand. Hoort in de `actions` van de Section.
+ *  Op mobiel is inline bewerken geen verbetering — vijf invoervelden naast
+ *  elkaar in één rij betekent daar vooral zijwaarts schuiven — dus dan is de
+ *  knop er niet en gaat bewerken via het detailscherm. */
 export function EditToggle({ editing, onToggle }: { editing: boolean; onToggle: () => void }) {
+  const isMobile = useIsMobile();
+  if (isMobile) return null;
   return (
     <Btn kind={editing ? "primary" : "default"} icon={editing ? "check" : "edit"} onClick={onToggle}>
       {editing ? "Klaar" : "Bewerken"}
     </Btn>
   );
+}
+
+/** Bewerkstand die op mobiel altijd uit staat, ongeacht de opgeslagen keuze. */
+export function useEditMode(): [boolean, () => void] {
+  const isMobile = useIsMobile();
+  const [editing, setEditing] = useState(false);
+  return [editing && !isMobile, () => setEditing((v) => !v)];
 }
 
 /** Cel die buiten de bewerkstand gewone inhoud toont en erin een invoerveld wordt.

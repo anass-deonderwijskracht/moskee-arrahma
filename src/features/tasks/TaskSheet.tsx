@@ -66,7 +66,7 @@ export function TaskSheet({ task, users, onClose }: { task: Task; users: AppUser
               onBlur={(e) => { const v = e.target.value.trim(); if (v !== (task.description ?? "")) save({ description: v || null }); }} />
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 20 }}>
+          <div className="grid-2" style={{ gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 20 }}>
             <div>
               <label style={lbl}>Status</label>
               <Select value={task.status} onChange={(e) => save({ status: e.target.value })}>

@@ -162,7 +162,7 @@ export function QuranAdministratie({ classId, leerlingen, lesson, lessons, setLe
           const isDone = !st.afwezig && allEval;
           return (
             <div key={l.id} className="card" style={{ padding: 0, overflow: "hidden", border: "1px solid " + (st.afwezig ? "var(--border-strong)" : isDone ? "var(--success)" : "var(--border)"), opacity: isDone ? 0.9 : 1 }}>
-              <div style={{ display: "grid", gridTemplateColumns: "230px 1fr 1fr", minHeight: 120 }}>
+              <div className="grid-3" style={{ gridTemplateColumns: "230px 1fr 1fr", gap: 0, minHeight: 120 }}>
                 {/* Leerling header */}
                 <div style={{ padding: 16, background: "var(--bg-sunken)", borderRight: "1px solid var(--border)", display: "flex", flexDirection: "column", gap: 10 }}>
                   <div className="flex items-center gap-3">

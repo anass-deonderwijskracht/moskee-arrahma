@@ -139,7 +139,7 @@ function ClassOverview({ classId, cls, leerlingen }: { classId: string; cls: Non
           : <Btn size="sm" icon="edit" onClick={startEdit}>Bewerken</Btn>}
       >
         {editing ? (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
+          <div className="grid-auto tight">
             <Field label="Klasnaam"><input className="input" value={form.code} onChange={(e) => setForm((f) => ({ ...f, code: e.target.value }))} /></Field>
             <Field label="Niveau (groep)"><input className="input" type="number" min={1} max={9} value={form.grade} onChange={(e) => setForm((f) => ({ ...f, grade: parseInt(e.target.value) || 1 }))} /></Field>
             <Field label="Max. bezetting"><input className="input" type="number" min={1} max={40} value={form.capacity} onChange={(e) => setForm((f) => ({ ...f, capacity: parseInt(e.target.value) || 0 }))} /></Field>
@@ -150,7 +150,7 @@ function ClassOverview({ classId, cls, leerlingen }: { classId: string; cls: Non
             <Field label="Locatie"><input className="input" value={form.location} onChange={(e) => setForm((f) => ({ ...f, location: e.target.value }))} /></Field>
           </div>
         ) : (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 24, fontSize: 13 }}>
+          <div className="grid-auto" style={{ fontSize: 13 }}>
             {([
               ["Klasnaam", cls.code, "school"],
               ["Niveau", "Groep " + cls.grade, "flag"],

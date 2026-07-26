@@ -44,7 +44,7 @@ export function KindDetail() {
             {current?.classes && <Badge kind={(current.classes.color as BadgeKind) ?? "primary"}>{current.classes.code} (huidig)</Badge>}
             <Badge>{age != null ? age + " jaar" : ""} · {k.gender === "f" ? "♀" : "♂"}</Badge>
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0,1fr))", gap: 24, marginTop: 16 }}>
+          <div className="grid-auto" style={{ marginTop: 16 }}>
             <div><div className="text-xs text-subtle">Aanwezigheid (gemiddeld)</div><div style={{ fontSize: 22, fontWeight: 600 }}>{pct(avgAtt)}</div></div>
             <div>
               <div className="text-xs text-subtle">Surahs nu</div>
@@ -63,7 +63,7 @@ export function KindDetail() {
             const att = attendanceOf(y, metrics);
             const surahs = isCurrent ? (metrics[y.id]?.surahs_known ?? 0) : (y.hist_surahs_known ?? 0);
             return (
-              <div key={y.id} style={{ display: "grid", gridTemplateColumns: "100px 200px 1fr 150px 100px", gap: 16, padding: 16, borderRadius: 12, background: isCurrent ? "var(--primary-soft)" : "var(--bg-sunken)", border: "1px solid " + (isCurrent ? "var(--primary)" : "var(--border)"), alignItems: "center" }}>
+              <div key={y.id} className="grid-auto tight" style={{ padding: 16, borderRadius: 12, background: isCurrent ? "var(--primary-soft)" : "var(--bg-sunken)", border: "1px solid " + (isCurrent ? "var(--primary)" : "var(--border)"), alignItems: "center" }}>
                 <div>
                   <div className="font-mono font-semibold" style={{ fontSize: 15 }}>{y.schooljaren?.name}</div>
                   {isCurrent && <div className="text-xs" style={{ color: "var(--primary)", marginTop: 2, fontWeight: 600 }}>HUIDIG</div>}

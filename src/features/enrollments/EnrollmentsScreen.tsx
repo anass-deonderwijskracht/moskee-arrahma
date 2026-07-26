@@ -3,6 +3,7 @@ import { Section, Card, Btn, Icon, Badge, Pills, Avatar, type Option } from "@/c
 import { Loading, ErrorState } from "@/features/_shared/states";
 import { useToast } from "@/components/chrome/Toast";
 import { useTableTools, SortTh, SelectTh, SelectTd, SearchBox, BulkBar } from "@/features/_shared/tableTools";
+import { CardMove, EmptyCol } from "@/features/_shared/kanban";
 import { useEnrollments, useUpdateEnrollmentStatus, useDeleteEnrollments, usePlacements, type Enrollment } from "@/data/enrollments";
 import { useSchooljaren } from "@/data/schooljaren";
 import { ENROLL_COLUMNS } from "@/data/dashboard";
@@ -77,12 +78,15 @@ export function EnrollmentsScreen() {
     });
   };
 
+  const moveTo = (id: string, col: string) => {
+    const item = items.find((i) => i.id === id);
+    if (!item || item.status === col) return;
+    updateStatus.mutate({ id, status: col });
+    toast(`${item.child_name} verplaatst naar “${STATUS_TITLE[col]}”`);
+  };
+
   const onDrop = (col: string) => {
-    if (dragId) {
-      const item = items.find((i) => i.id === dragId);
-      updateStatus.mutate({ id: dragId, status: col });
-      if (item) toast(`${item.child_name} verplaatst naar “${STATUS_TITLE[col]}”`);
-    }
+    if (dragId) moveTo(dragId, col);
     setDragId(null); setDropCol(null);
   };
 
@@ -125,7 +129,7 @@ export function EnrollmentsScreen() {
         }
       >
         {isLoading ? <Loading /> : view === "kanban" ? (
-          <div className="kanban" style={{ height: "calc(100vh - 240px)" }}>
+          <div className="kanban fill">
             {ENROLL_COLUMNS.map((col) => {
               const colItems = visible.filter((i) => i.status === col.id);
               return (
@@ -153,10 +157,11 @@ export function EnrollmentsScreen() {
                           {p[1] && <div className="meta"><span className="truncate">{p[1].name} <span style={{ color: "var(--fg-subtle)" }}>· {p[1].role}</span></span></div>}
                           <div className="meta" style={{ marginTop: 2, borderTop: "1px solid var(--border)", paddingTop: 8 }}><Icon name="clock" size={11} /> {item.submitted_label ?? ""}</div>
                           {item.rejection_reason && <div className="text-xs" style={{ color: "var(--danger)", padding: "4px 8px", background: "var(--danger-soft)", borderRadius: 6 }}>{item.rejection_reason}</div>}
+                          <CardMove columns={ENROLL_COLUMNS} current={item.status} onMove={(s) => moveTo(item.id, s)} />
                         </div>
                       );
                     })}
-                    {colItems.length === 0 && <div style={{ padding: "20px 10px", textAlign: "center", color: "var(--fg-faint)", fontSize: 12 }}>Sleep een kaart hierheen</div>}
+                    {colItems.length === 0 && <EmptyCol />}
                   </div>
                 </div>
               );

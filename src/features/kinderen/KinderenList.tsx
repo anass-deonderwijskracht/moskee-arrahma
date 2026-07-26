@@ -4,7 +4,7 @@ import { Section, Card, Avatar, Icon, Btn, Select } from "@/components/ui";
 import { Modal, Field, ModalFooter } from "@/components/ui/Modal";
 import { Loading, ErrorState } from "@/features/_shared/states";
 import { useToast } from "@/components/chrome/Toast";
-import { useTableTools, SortTh, SelectTh, SelectTd, SearchBox, BulkBar, EditToggle } from "@/features/_shared/tableTools";
+import { useTableTools, SortTh, SelectTh, SelectTd, SearchBox, BulkBar, EditToggle, useEditMode } from "@/features/_shared/tableTools";
 import { useKinderen, useCreateKind, useDeleteKinderen, useUpdateKind, type KindRow } from "@/data/people";
 import { useCurrentSchooljaar } from "@/data/schooljaren";
 
@@ -18,7 +18,7 @@ export function KinderenList() {
   const createKind = useCreateKind();
   const del = useDeleteKinderen();
   const update = useUpdateKind();
-  const [editing, setEditing] = useState(false);
+  const [editing, toggleEditing] = useEditMode();
   const [adding, setAdding] = useState(false);
   // Een naamswijziging gaat mee als `name`, zodat de initialen opnieuw worden afgeleid.
   const saveName = (k: KindRow, patch: { first_name?: string; last_name?: string }) => {
@@ -71,7 +71,7 @@ export function KinderenList() {
       actions={
         <>
           <SearchBox value={tools.q} onChange={tools.setQ} placeholder="Zoek kind…" />
-          <EditToggle editing={editing} onToggle={() => setEditing((v) => !v)} />
+          <EditToggle editing={editing} onToggle={toggleEditing} />
           <Btn icon="plus" kind="primary" onClick={() => setAdding(true)}>Kind toevoegen</Btn>
         </>
       }

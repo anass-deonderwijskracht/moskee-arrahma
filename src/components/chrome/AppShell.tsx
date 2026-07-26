@@ -1,24 +1,12 @@
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { Outlet, NavLink, useLocation } from "react-router-dom";
 import { Icon } from "@/components/ui";
+import { Loading } from "@/features/_shared/states";
 import { useSession } from "@/features/auth/AuthProvider";
 import { Sidebar } from "./Sidebar";
 import { TweaksPanel } from "./TweaksPanel";
 import { useTweaks } from "./useTweaks";
-
-/** True while the viewport is at the mobile breakpoint (matches the CSS @media). */
-function useIsMobile(): boolean {
-  const [isMobile, setIsMobile] = useState(() =>
-    typeof window !== "undefined" && window.matchMedia("(max-width: 900px)").matches,
-  );
-  useEffect(() => {
-    const mq = window.matchMedia("(max-width: 900px)");
-    const onChange = () => setIsMobile(mq.matches);
-    mq.addEventListener("change", onChange);
-    return () => mq.removeEventListener("change", onChange);
-  }, []);
-  return isMobile;
-}
+import { useIsMobile } from "./useIsMobile";
 
 const TOPNAV = [
   { to: "/dashboard", label: "Dashboard" },
@@ -27,8 +15,10 @@ const TOPNAV = [
   { to: "/students", label: "Leerlingen" },
   { to: "/classes", label: "Klassen" },
   { to: "/teachers", label: "Docenten" },
+  { to: "/tasks", label: "Taken" },
   { to: "/planning", label: "Planning" },
   { to: "/enrollments", label: "Inschrijvingen" },
+  { to: "/admin-toetsen", label: "Toetsen" },
   { to: "/finance", label: "Financiën" },
   { to: "/settings", label: "Instellingen" },
 ];
@@ -91,7 +81,10 @@ export function AppShell() {
         {tweaks.navigation === "topnav" && <TopNavRow />}
         <main className="page">
           <div className="page-narrow">
-            <Outlet />
+            {/* De zwaarste schermen worden apart geladen; de shell blijft staan. */}
+            <Suspense fallback={<Loading />}>
+              <Outlet />
+            </Suspense>
           </div>
         </main>
       </div>
