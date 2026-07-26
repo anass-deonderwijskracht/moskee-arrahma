@@ -67,13 +67,86 @@ export interface PayoutMonth {
 
 export interface PayoutOverview { months: PayoutMonth[]; total: number; paidTotal: number; openTotal: number; openCount: number; }
 
-interface PayoutLesson {
-  date: string; type: string; teacher_id: string | null; quran_teacher_id: string | null;
+export interface PayoutLesson {
+  date: string; teacher_id: string | null; quran_teacher_id: string | null;
   classes: { time: string | null } | null;
 }
 
 /** Het bedrag dat een rij vertegenwoordigt: uitbetaald → snapshot, anders live. */
 export const rowAmount = (r: PayoutRow) => (r.payout ? Number(r.payout.amount) : r.amount);
+
+/** Pure kern: planning + vastgelegde uitbetalingen → maanden met docentregels. */
+export function buildPayoutOverview(
+  teachers: Teacher[], lessons: PayoutLesson[], payouts: TeacherPayout[],
+): PayoutOverview {
+  const teacherById = new Map(teachers.map((t) => [t.id, t]));
+  const paidByKey = new Map(payouts.map((p) => [monthKey(p.period) + ":" + p.teacher_id, p]));
+
+  // maand → docent → live uren/lessen uit de planning
+  const grid = new Map<string, Map<string, { lessons: number; hours: number }>>();
+  const bucket = (mk: string, id: string) => {
+    const month = grid.get(mk) ?? new Map<string, { lessons: number; hours: number }>();
+    grid.set(mk, month);
+    const cell = month.get(id) ?? { lessons: 0, hours: 0 };
+    month.set(id, cell);
+    return cell;
+  };
+
+  for (const l of lessons) {
+    const hours = lessonHours(l.classes?.time);
+    const mk = monthKey(l.date);
+    // Staat dezelfde docent als les- én Qur'an-docent, dan telt hij twee keer.
+    for (const id of [l.teacher_id, l.quran_teacher_id]) {
+      if (!id || !teacherById.has(id)) continue;
+      const cell = bucket(mk, id);
+      cell.lessons += 1;
+      cell.hours += hours;
+    }
+  }
+  // Al uitbetaalde maanden blijven zichtbaar, ook als de planning intussen leeg is.
+  for (const p of payouts) {
+    if (teacherById.has(p.teacher_id)) bucket(monthKey(p.period), p.teacher_id);
+  }
+
+  const months: PayoutMonth[] = [...grid.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([key, cells]) => {
+      const rows: PayoutRow[] = [...cells.entries()]
+        .map(([id, cell]) => {
+          const teacher = teacherById.get(id)!;
+          const rate = teacher.uurtarief == null ? null : Number(teacher.uurtarief);
+          const amount = cell.hours * (rate ?? 0);
+          const payout = paidByKey.get(key + ":" + id) ?? null;
+          const drifted = !!payout
+            && (Math.abs(Number(payout.hours) - cell.hours) > 0.001 || Math.abs(Number(payout.amount) - amount) > 0.01);
+          return { teacher, lessons: cell.lessons, hours: cell.hours, rate, amount, payout, drifted };
+        })
+        .sort((a, b) => a.teacher.name.localeCompare(b.teacher.name));
+
+      const paidRows = rows.filter((r) => r.payout);
+      const openRows = rows.filter((r) => !r.payout);
+      const paidTotal = paidRows.reduce((a, r) => a + rowAmount(r), 0);
+      const openTotal = openRows.reduce((a, r) => a + r.amount, 0);
+      return {
+        key,
+        label: monthLabel(key),
+        rows,
+        hours: rows.reduce((a, r) => a + (r.payout ? Number(r.payout.hours) : r.hours), 0),
+        total: paidTotal + openTotal,
+        paidTotal,
+        openTotal,
+        openCount: openRows.length,
+      };
+    });
+
+  return {
+    months,
+    total: months.reduce((a, m) => a + m.total, 0),
+    paidTotal: months.reduce((a, m) => a + m.paidTotal, 0),
+    openTotal: months.reduce((a, m) => a + m.openTotal, 0),
+    openCount: months.reduce((a, m) => a + m.openCount, 0),
+  };
+}
 
 /** Alle maanden van één schooljaar met per maand de docenten, uren en status. */
 export function usePayoutOverview(schooljaarId: string | null) {
@@ -94,71 +167,11 @@ export function usePayoutOverview(schooljaarId: string | null) {
       if (lErr) throw lErr;
       if (pErr) throw pErr;
 
-      const teacherById = new Map((teachers as Teacher[] ?? []).map((t) => [t.id, t]));
-      const paidByKey = new Map(
-        ((payouts as TeacherPayout[]) ?? []).map((p) => [monthKey(p.period) + ":" + p.teacher_id, p]),
+      return buildPayoutOverview(
+        (teachers as Teacher[]) ?? [],
+        (lessons as unknown as PayoutLesson[]) ?? [],
+        (payouts as TeacherPayout[]) ?? [],
       );
-
-      // maand → docent → live uren/lessen uit de planning
-      const grid = new Map<string, Map<string, { lessons: number; hours: number }>>();
-      const bucket = (mk: string, id: string) => {
-        const month = grid.get(mk) ?? new Map();
-        grid.set(mk, month);
-        const cell = month.get(id) ?? { lessons: 0, hours: 0 };
-        month.set(id, cell);
-        return cell;
-      };
-      for (const l of (lessons as unknown as PayoutLesson[]) ?? []) {
-        const hours = lessonHours(l.classes?.time);
-        const mk = monthKey(l.date);
-        for (const id of [l.teacher_id, l.quran_teacher_id]) {
-          if (!id || !teacherById.has(id)) continue;
-          const cell = bucket(mk, id);
-          cell.lessons += 1;
-          cell.hours += hours;
-        }
-      }
-      // Al uitbetaalde maanden blijven zichtbaar, ook als de planning intussen leeg is.
-      for (const p of (payouts as TeacherPayout[]) ?? []) {
-        if (teacherById.has(p.teacher_id)) bucket(monthKey(p.period), p.teacher_id);
-      }
-
-      const months: PayoutMonth[] = [...grid.entries()]
-        .sort((a, b) => a[0].localeCompare(b[0]))
-        .map(([key, cells]) => {
-          const rows: PayoutRow[] = [...cells.entries()]
-            .map(([id, cell]) => {
-              const teacher = teacherById.get(id)!;
-              const rate = teacher.uurtarief == null ? null : Number(teacher.uurtarief);
-              const amount = cell.hours * (rate ?? 0);
-              const payout = paidByKey.get(key + ":" + id) ?? null;
-              const drifted =
-                !!payout && (Math.abs(Number(payout.hours) - cell.hours) > 0.001 || Math.abs(Number(payout.amount) - amount) > 0.01);
-              return { teacher, lessons: cell.lessons, hours: cell.hours, rate, amount, payout, drifted };
-            })
-            .sort((a, b) => a.teacher.name.localeCompare(b.teacher.name));
-
-          const paidTotal = rows.filter((r) => r.payout).reduce((a, r) => a + rowAmount(r), 0);
-          const openRows = rows.filter((r) => !r.payout);
-          return {
-            key,
-            label: monthLabel(key),
-            rows,
-            hours: rows.reduce((a, r) => a + (r.payout ? Number(r.payout.hours) : r.hours), 0),
-            total: paidTotal + openRows.reduce((a, r) => a + r.amount, 0),
-            paidTotal,
-            openTotal: openRows.reduce((a, r) => a + r.amount, 0),
-            openCount: openRows.length,
-          };
-        });
-
-      return {
-        months,
-        total: months.reduce((a, m) => a + m.total, 0),
-        paidTotal: months.reduce((a, m) => a + m.paidTotal, 0),
-        openTotal: months.reduce((a, m) => a + m.openTotal, 0),
-        openCount: months.reduce((a, m) => a + m.openCount, 0),
-      };
     },
   });
 }
