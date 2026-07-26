@@ -41,20 +41,31 @@ const invalidate = (qc: ReturnType<typeof useQueryClient>) => {
 export interface NewTask {
   title: string; description: string | null; status: string; priority: string;
   due_date: string | null; assignee_id: string | null;
+  /** Subtaken die direct bij het aanmaken worden meegegeven. */
+  subtasks?: string[];
 }
 
 export function useCreateTask() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (input: NewTask) => {
+    mutationFn: async ({ subtasks = [], ...task }: NewTask) => {
       const { data: session } = await supabase.auth.getUser();
       const { data, error } = await supabase
         .from("tasks")
-        .insert({ ...input, created_by: session.user?.id ?? null } as never)
+        .insert({ ...task, created_by: session.user?.id ?? null } as never)
         .select("id")
         .single();
       if (error) throw error;
-      return (data as { id: string }).id;
+      const id = (data as { id: string }).id;
+
+      const labels = subtasks.map((s) => s.trim()).filter(Boolean);
+      if (labels.length) {
+        const { error: se } = await supabase.from("task_subtasks").insert(
+          labels.map((label, i) => ({ task_id: id, label, position: i })) as never,
+        );
+        if (se) throw se;
+      }
+      return id;
     },
     onSuccess: () => invalidate(qc),
   });

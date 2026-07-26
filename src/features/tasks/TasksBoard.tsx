@@ -36,6 +36,8 @@ export function TasksBoard() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState(EMPTY);
+  const [subs, setSubs] = useState<string[]>([]);
+  const [newSub, setNewSub] = useState("");
   const [who, setWho] = useState(""); // "" = iedereen, "none" = niet toegewezen
 
   const userName = useMemo(() => {
@@ -59,7 +61,16 @@ export function TasksBoard() {
     setDragId(null); setDropCol(null);
   };
 
+  const closeAdd = () => { setAdding(false); setForm(EMPTY); setSubs([]); setNewSub(""); };
+  const addSubRow = () => {
+    const v = newSub.trim();
+    if (!v) return;
+    setSubs((s) => [...s, v]); setNewSub("");
+  };
+
   const saveNew = async () => {
+    // Een subtaak die nog in het invoerveld staat telt gewoon mee.
+    const pending = newSub.trim();
     try {
       await create.mutateAsync({
         title: form.title.trim(),
@@ -68,8 +79,9 @@ export function TasksBoard() {
         priority: form.priority,
         due_date: form.due_date || null,
         assignee_id: form.assignee_id || null,
+        subtasks: pending ? [...subs, pending] : subs,
       });
-      toast("Taak toegevoegd"); setAdding(false); setForm(EMPTY);
+      toast("Taak toegevoegd"); closeAdd();
     } catch (e) { toast("Toevoegen mislukt: " + (e instanceof Error ? e.message : "")); }
   };
 
@@ -129,8 +141,8 @@ export function TasksBoard() {
       {selected && <TaskSheet key={selected.id} task={selected} users={users ?? []} onClose={() => setSelectedId(null)} />}
 
       {adding && (
-        <Modal title="Nieuwe taak" sub="Komt in de kolom To-do" onClose={() => setAdding(false)}
-          footer={<ModalFooter onCancel={() => setAdding(false)} onSave={saveNew} saving={create.isPending} disabled={!form.title.trim()} />}>
+        <Modal title="Nieuwe taak" sub="Komt in de kolom To-do" onClose={closeAdd}
+          footer={<ModalFooter onCancel={closeAdd} onSave={saveNew} saving={create.isPending} disabled={!form.title.trim()} />}>
           <Field label="Naam"><input className="input" autoFocus value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} placeholder="Wat moet er gebeuren?" /></Field>
           <Field label="Beschrijving"><textarea className="textarea" rows={3} value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} /></Field>
           <div className="grid-3" style={{ gridTemplateColumns: "1fr 1fr" }}>
@@ -147,7 +159,24 @@ export function TasksBoard() {
               {(users ?? []).map((u) => <option key={u.id} value={u.id}>{u.full_name ?? u.email}</option>)}
             </Select>
           </Field>
-          <div className="text-xs text-subtle">Subtaken voeg je toe zodra de taak op het bord staat.</div>
+          <Field label="Subtaken">
+            <div className="flex-col gap-1">
+              {subs.map((s, i) => (
+                <div key={i} className="flex items-center gap-2" style={{ padding: "6px 8px", background: "var(--bg-sunken)", borderRadius: 8 }}>
+                  <input type="checkbox" disabled aria-hidden />
+                  <span className="text-sm" style={{ flex: 1 }}>{s}</span>
+                  <button className="btn ghost sm" aria-label={`${s} verwijderen`}
+                    onClick={() => setSubs((prev) => prev.filter((_, j) => j !== i))}><Icon name="x" size={11} /></button>
+                </div>
+              ))}
+            </div>
+            <div className="flex gap-2" style={{ marginTop: subs.length ? 8 : 0 }}>
+              <input className="input" value={newSub} placeholder="Subtaak toevoegen…" style={{ flex: 1 }}
+                onChange={(e) => setNewSub(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addSubRow(); } }} />
+              <Btn icon="plus" onClick={addSubRow} disabled={!newSub.trim()}>Toevoegen</Btn>
+            </div>
+          </Field>
         </Modal>
       )}
     </>
