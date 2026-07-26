@@ -71,6 +71,18 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["tuition_tiers"]["Row"]>;
         Relationships: [];
       };
+      teacher_payouts: {
+        Row: {
+          id: string; teacher_id: string; schooljaar_id: string; period: string;
+          lessons: number; hours: number; rate: number | null; amount: number;
+          paid_at: string; note: string | null;
+        } & Timestamps;
+        Insert: { teacher_id: string; schooljaar_id: string; period: string } & Partial<
+          Database["public"]["Tables"]["teacher_payouts"]["Row"]
+        >;
+        Update: Partial<Database["public"]["Tables"]["teacher_payouts"]["Row"]>;
+        Relationships: [];
+      };
       teachers: {
         Row: {
           id: string; name: string; short: string | null; email: string | null;
@@ -229,6 +241,22 @@ export interface Database {
         } & Timestamps;
         Insert: { leerling_id: string } & Partial<Database["public"]["Tables"]["payments"]["Row"]>;
         Update: Partial<Database["public"]["Tables"]["payments"]["Row"]>;
+        Relationships: [];
+      };
+      tasks: {
+        Row: {
+          id: string; title: string; description: string | null; status: string;
+          priority: string; due_date: string | null; assignee_id: string | null;
+          created_by: string | null; updated_at: string;
+        } & Timestamps;
+        Insert: { title: string } & Partial<Database["public"]["Tables"]["tasks"]["Row"]>;
+        Update: Partial<Database["public"]["Tables"]["tasks"]["Row"]>;
+        Relationships: [];
+      };
+      task_subtasks: {
+        Row: { id: string; task_id: string; label: string; done: boolean; position: number; created_at: string };
+        Insert: { task_id: string; label: string } & Partial<Database["public"]["Tables"]["task_subtasks"]["Row"]>;
+        Update: Partial<Database["public"]["Tables"]["task_subtasks"]["Row"]>;
         Relationships: [];
       };
       audit_log: {

@@ -15,6 +15,7 @@ import { OudersList } from "@/features/ouders/OudersList";
 import { OuderDetail } from "@/features/ouders/OuderDetail";
 import { TeachersList } from "@/features/teachers/TeachersList";
 import { TeacherDetail } from "@/features/teachers/TeacherDetail";
+import { TasksBoard } from "@/features/tasks/TasksBoard";
 import { StudentsList } from "@/features/students/StudentsList";
 import { LeerlingDetail } from "@/features/students/LeerlingDetail";
 import { ClassesList } from "@/features/classes/ClassesList";
@@ -38,6 +39,8 @@ export function App() {
                 {/* Accessible to admins and to the docent of that class (RLS-scoped). */}
                 <Route path="/classes/:id" element={<ClassDetail />} />
                 <Route path="/students/:id" element={<LeerlingDetail />} />
+                {/* Gedeeld teambord: admins én docenten. */}
+                <Route path="/tasks" element={<TasksBoard />} />
                 {/* Admin-only. */}
                 <Route element={<RequireAdmin />}>
                   <Route path="/dashboard" element={<Dashboard />} />

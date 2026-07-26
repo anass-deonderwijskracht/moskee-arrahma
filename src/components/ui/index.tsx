@@ -1,4 +1,5 @@
 // UI atoms — ported from the prototype's shared.jsx to typed React.
+import { useEffect, useRef, useState } from "react";
 import type { ReactNode, SelectHTMLAttributes, ButtonHTMLAttributes } from "react";
 import {
   Home, Users, User, BookOpen, Calendar, Inbox, Coins, School, Settings, Search,
@@ -133,6 +134,85 @@ export function Tabs<T extends string>({ value, onChange, options }: { value: T;
           {o.label}
         </button>
       ))}
+    </div>
+  );
+}
+
+/** Aan/uit-schakelaar met label — voor filters die niets opslaan. */
+export function Toggle({ checked, onChange, label, title }: {
+  checked: boolean; onChange: (v: boolean) => void; label?: ReactNode; title?: string;
+}) {
+  return (
+    <button type="button" role="switch" aria-checked={checked} title={title}
+      className="flex items-center gap-2" onClick={() => onChange(!checked)} style={{ cursor: "pointer" }}>
+      <span style={{
+        width: 34, height: 19, borderRadius: 999, padding: 2, display: "inline-flex", alignItems: "center",
+        background: checked ? "var(--primary)" : "var(--border)", transition: "background 0.15s", flexShrink: 0,
+      }}>
+        <span style={{
+          width: 15, height: 15, borderRadius: "50%", background: "var(--bg-elev)", boxShadow: "var(--shadow-xs)",
+          transform: `translateX(${checked ? 15 : 0}px)`, transition: "transform 0.15s",
+        }} />
+      </span>
+      {label && <span className="text-sm" style={{ color: checked ? "var(--fg)" : "var(--fg-muted)", fontWeight: 500 }}>{label}</span>}
+    </button>
+  );
+}
+
+/** Dropdown waarin je meerdere opties aanvinkt, met een "alles"-schakelaar bovenaan. */
+export function MultiSelect({
+  value, onChange, options, allLabel = "Alles", placeholder = "Kies…", width = 240, emptyLabel = "Geen opties",
+}: {
+  value: string[]; onChange: (v: string[]) => void; options: Option[];
+  allLabel?: string; placeholder?: string; width?: number; emptyLabel?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => { document.removeEventListener("mousedown", onDown); document.removeEventListener("keydown", onKey); };
+  }, [open]);
+
+  const selected = new Set(value);
+  const all = options.length > 0 && value.length === options.length;
+  const summary = options.length === 0 ? emptyLabel
+    : all ? allLabel
+    : value.length === 0 ? placeholder
+    : value.length === 1 ? (options.find((o) => o.value === value[0])?.label ?? "1 gekozen")
+    : `${value.length} van ${options.length}`;
+
+  const toggle = (v: string) => onChange(selected.has(v) ? value.filter((x) => x !== v) : [...value, v]);
+
+  return (
+    <div ref={ref} style={{ position: "relative", width }}>
+      <button type="button" className="select" disabled={options.length === 0}
+        onClick={() => setOpen((o) => !o)}
+        style={{ width: "100%", textAlign: "left", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, cursor: options.length ? "pointer" : "default" }}>
+        <span className="truncate" style={{ color: value.length ? "var(--fg)" : "var(--fg-subtle)" }}>{summary}</span>
+        <Icon name="chevronDown" size={14} />
+      </button>
+      {open && options.length > 0 && (
+        <div className="menu" style={{ left: 0, right: "auto", minWidth: "100%", maxHeight: 300, overflowY: "auto" }}>
+          <button className="sidebar-link" style={{ width: "100%", justifyContent: "flex-start", fontWeight: 600 }}
+            onClick={() => onChange(all ? [] : options.map((o) => o.value))}>
+            <span style={{ width: 14, display: "inline-flex" }}>{all && <Icon name="check" size={13} />}</span>
+            {allLabel}
+          </button>
+          <div style={{ height: 1, background: "var(--border)", margin: "4px 0" }} />
+          {options.map((o) => (
+            <button key={o.value} className="sidebar-link" style={{ width: "100%", justifyContent: "flex-start" }}
+              onClick={() => toggle(o.value)}>
+              <span style={{ width: 14, display: "inline-flex" }}>{selected.has(o.value) && <Icon name="check" size={13} />}</span>
+              {o.label}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

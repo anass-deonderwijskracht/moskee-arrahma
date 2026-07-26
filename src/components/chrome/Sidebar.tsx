@@ -15,6 +15,8 @@ export function Sidebar({ collapsed, setCollapsed }: { collapsed: boolean; setCo
     ? [
         { group: "Mijn klas" },
         { to: classId ? `/classes/${classId}` : "/", label: "Mijn klas", icon: "school" },
+        { group: "Onderwijs" },
+        { to: "/tasks", label: "Taken", icon: "list", countKey: "tasks" },
       ]
     : [
         { group: "Overzicht" },
@@ -27,6 +29,7 @@ export function Sidebar({ collapsed, setCollapsed }: { collapsed: boolean; setCo
         { group: "Onderwijs" },
         { to: "/students", label: "Leerlingen (dit jaar)", icon: "school", countKey: "leerlingen" },
         { to: "/classes", label: "Klassen", icon: "layoutGrid", countKey: "classes" },
+        { to: "/tasks", label: "Taken", icon: "list", countKey: "tasks" },
         { group: "Administratie" },
         { to: "/enrollments", label: "Inschrijvingen", icon: "inbox", countKey: "enrollments" },
         { to: "/admin-toetsen", label: "Toetsen", icon: "edit" },

@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { Section, Card, Badge, Icon, Avatar, Btn, EUR, type BadgeKind } from "@/components/ui";
 import { Loading, ErrorState } from "@/features/_shared/states";
 import { useTeacherDetail } from "@/data/people";
+import { useTeacherPayoutHistory } from "@/data/payouts";
 import { TeacherFormModal } from "./TeacherFormModal";
 
 const ROLE_LABEL: Record<string, { label: string; kind: BadgeKind }> = {
@@ -84,6 +85,8 @@ export function TeacherDetail() {
         {noRate && perYear.length > 0 && <div className="text-xs text-subtle mt-2">Stel een uurtarief in om de kosten te begroten.</div>}
       </Card>
 
+      <PayoutHistoryCard teacherId={t.id} rate={t.uurtarief ?? null} />
+
       <div className="grid-2">
         <Card title={<><Icon name="school" size={14} /> Klassen (historie)</>} sub={`${classes.length} ${classes.length === 1 ? "klas" : "klassen"} over alle schooljaren`}>
           {classes.length === 0 ? <div className="empty">Niet ingedeeld bij een klas.</div> : (
@@ -133,5 +136,65 @@ export function TeacherDetail() {
 
       {editing && <TeacherFormModal initial={t} onClose={() => setEditing(false)} />}
     </Section>
+  );
+}
+
+const money = (n: number) => "€" + n.toLocaleString("nl-NL", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+/** Alle maanden waarin deze docent lesgaf: wat er is uitbetaald en wat nog openstaat. */
+function PayoutHistoryCard({ teacherId, rate }: { teacherId: string; rate: number | null }) {
+  const { data, isLoading } = useTeacherPayoutHistory(teacherId, rate);
+  const rows = data?.rows ?? [];
+
+  return (
+    <Card
+      title={<><Icon name="coins" size={14} /> Uitbetalingen per maand</>}
+      sub="Openstaand wordt live berekend uit de planning; uitbetaalde maanden tonen het vastgelegde bedrag"
+      action={data && (data.openCount > 0
+        ? <Badge kind="warn" dot>{data.openCount} openstaand · {money(data.openTotal)}</Badge>
+        : rows.length > 0 ? <Badge kind="success" dot>Alles uitbetaald</Badge> : null)}
+    >
+      {isLoading ? <Loading label="Uitbetalingen laden…" />
+        : rows.length === 0 ? <div className="empty">Nog geen maanden met ingeplande lessen.</div> : (
+        <>
+          <div style={{ maxHeight: 420, overflowY: "auto" }}>
+            <table className="table">
+              <thead><tr>
+                <th>Maand</th>
+                <th>Schooljaar</th>
+                <th style={{ textAlign: "right" }}>Lessen</th>
+                <th style={{ textAlign: "right" }}>Uren</th>
+                <th style={{ textAlign: "right" }}>Bedrag</th>
+                <th>Status</th>
+              </tr></thead>
+              <tbody>
+                {rows.map((r) => {
+                  const paid = r.payout;
+                  return (
+                    <tr key={r.schooljaarId + ":" + r.month} style={{ background: paid ? "var(--success-soft)" : undefined }}>
+                      <td className="font-semibold">{r.label}</td>
+                      <td className="text-sm text-muted">{r.schooljaarName}</td>
+                      <td className="num text-sm" style={{ textAlign: "right" }}>{paid ? paid.lessons : r.lessons}</td>
+                      <td className="num text-sm" style={{ textAlign: "right" }}>{fmtHours(paid ? Number(paid.hours) : r.hours)}</td>
+                      <td className="num font-semibold" style={{ textAlign: "right" }}>{money(paid ? Number(paid.amount) : r.amount)}</td>
+                      <td>
+                        {paid
+                          ? <Badge kind="success" dot>Uitbetaald · {ddmmyyyy(paid.paid_at)}</Badge>
+                          : <Badge kind="warn" dot>Openstaand</Badge>}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <div className="flex gap-4 mt-3 text-sm" style={{ flexWrap: "wrap" }}>
+            <span className="text-subtle">Totaal uitbetaald: <b className="num" style={{ color: "var(--success)" }}>{money(data?.paidTotal ?? 0)}</b></span>
+            <span className="text-subtle">Nog openstaand: <b className="num" style={{ color: (data?.openTotal ?? 0) > 0 ? "var(--danger)" : "var(--fg)" }}>{money(data?.openTotal ?? 0)}</b></span>
+            <span className="text-subtle">Afvinken doe je bij <b>Docenten → Uitbetalen</b>.</span>
+          </div>
+        </>
+      )}
+    </Card>
   );
 }

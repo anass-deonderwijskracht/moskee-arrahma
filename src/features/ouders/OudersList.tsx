@@ -77,6 +77,7 @@ export function OudersList() {
               <tr>
                 <SelectTh allChecked={tools.allChecked} onToggle={tools.toggleAll} />
                 <SortTh label="Ouder/voogd" k="name" sort={tools.sort} onSort={tools.toggleSort} />
+                <SortTh label="Rol" k="role" sort={tools.sort} onSort={tools.toggleSort} />
                 <SortTh label="Telefoon" k="phone" sort={tools.sort} onSort={tools.toggleSort} />
                 <SortTh label="E-mail" k="email" sort={tools.sort} onSort={tools.toggleSort} />
                 <SortTh label="Kinderen" k="kinderen" sort={tools.sort} onSort={tools.toggleSort} />
@@ -94,21 +95,20 @@ export function OudersList() {
                     <div className="flex items-center gap-3">
                       <Avatar name={o.name} size="sm" />
                       {editing ? (
-                        <div className="flex-col gap-1" style={{ minWidth: 180 }}>
-                          <input key={o.name} className="input" defaultValue={o.name}
-                            onBlur={(e) => { const v = e.target.value.trim(); if (v && v !== o.name) save(o.id, { name: v }); }} />
-                          <Select value={o.role ?? ""} onChange={(e) => save(o.id, { role: e.target.value || null })} style={{ fontSize: 12 }}>
-                            <option value="">—</option>
-                            {ROLLEN.map((r) => <option key={r} value={r}>{r}</option>)}
-                          </Select>
-                        </div>
+                        <input key={o.name} className="input" defaultValue={o.name} style={{ minWidth: 180 }}
+                          onBlur={(e) => { const v = e.target.value.trim(); if (v && v !== o.name) save(o.id, { name: v }); }} />
                       ) : (
-                        <div>
-                          <div className="font-semibold">{o.name}</div>
-                          <div className="text-xs text-subtle">{o.role}</div>
-                        </div>
+                        <div className="font-semibold">{o.name}</div>
                       )}
                     </div>
+                  </td>
+                  <td className="text-sm" onClick={editing ? (e) => e.stopPropagation() : undefined}>
+                    {editing ? (
+                      <Select value={o.role ?? ""} onChange={(e) => save(o.id, { role: e.target.value || null })} style={{ width: 110 }}>
+                        <option value="">—</option>
+                        {ROLLEN.map((r) => <option key={r} value={r}>{r}</option>)}
+                      </Select>
+                    ) : o.role ?? <span className="text-subtle">—</span>}
                   </td>
                   <EditableTd editing={editing} className="text-sm font-mono" value={o.phone ?? ""} type="tel"
                     onSave={(v) => save(o.id, { phone: v.trim() || null })} />

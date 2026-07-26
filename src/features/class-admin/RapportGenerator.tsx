@@ -7,6 +7,7 @@ import { useClass, type ClassLeerling } from "@/data/classDetail";
 import { useSchooljaren } from "@/data/schooljaren";
 import { useLeerlingMetrics } from "@/data/leerlingen";
 import { useReportGrades, useClassLateCounts } from "@/data/rapporten";
+import { useAppSettings } from "@/data/finance";
 import "@/styles/rapport.css";
 
 export interface RapportSections {
@@ -67,6 +68,9 @@ function RapportPreview({ classId, reportPeriodId, periodName, leerlingen, secti
   const metrics = useLeerlingMetrics();
   const cls = useClass(classId);
   const schooljaren = useSchooljaren();
+  const { data: settings } = useAppSettings();
+  const orgName = settings?.name ?? "Moskee Arrahma";
+  const city = settings?.city ?? "";
   const ids = leerlingen.map((l) => l.id);
   const late = useClassLateCounts(ids, true);
 
@@ -116,8 +120,8 @@ function RapportPreview({ classId, reportPeriodId, periodName, leerlingen, secti
               <div className="rapport-page" key={l.id}>
                 <div className="r-header">
                   <div>
-                    <div className="r-brand-name">Moskee Arrahma</div>
-                    <div className="r-brand-sub">Weekendonderwijs · Almere</div>
+                    <div className="r-brand-name">{orgName}</div>
+                    <div className="r-brand-sub">Weekendonderwijs{city ? ` · ${city}` : ""}</div>
                   </div>
                   <div className="r-title">
                     <div className="r-title-main">Rapport</div>
@@ -168,7 +172,7 @@ function RapportPreview({ classId, reportPeriodId, periodName, leerlingen, secti
                 )}
 
                 <div className="r-footer">
-                  <div>Almere, {today}</div>
+                  <div>{city ? `${city}, ` : ""}{today}</div>
                   <div className="r-sign-line">Handtekening docent</div>
                 </div>
               </div>

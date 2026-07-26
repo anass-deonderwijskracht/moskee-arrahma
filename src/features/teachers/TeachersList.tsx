@@ -1,11 +1,18 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Section, Card, Avatar, Badge, Btn, type BadgeKind } from "@/components/ui";
+import { Section, Card, Avatar, Badge, Btn, Pills, type Option, type BadgeKind } from "@/components/ui";
 import { Loading, ErrorState } from "@/features/_shared/states";
 import { useToast } from "@/components/chrome/Toast";
 import { useTableTools, SortTh, SelectTh, SelectTd, SearchBox, BulkBar } from "@/features/_shared/tableTools";
 import { useTeachers, useDeleteTeachers, type Teacher } from "@/data/people";
 import { TeacherFormModal } from "./TeacherFormModal";
+import { TeacherPayouts } from "./TeacherPayouts";
+
+type View = "overzicht" | "uitbetalen";
+const VIEWS: Option<View>[] = [
+  { value: "overzicht", label: "Overzicht" },
+  { value: "uitbetalen", label: "Uitbetalen" },
+];
 
 const ROLE_LABEL: Record<string, { label: string; kind: BadgeKind }> = {
   les: { label: "Lesdocent", kind: "info" },
@@ -23,6 +30,7 @@ export function TeachersList() {
   const { data, isLoading, isError, error } = useTeachers();
   const del = useDeleteTeachers();
   const [adding, setAdding] = useState(false);
+  const [view, setView] = useState<View>("overzicht");
 
   const tools = useTableTools({
     rows: data ?? [],
@@ -49,13 +57,19 @@ export function TeachersList() {
   };
 
   return (
-    <Section title="Docenten" sub="Les- en Qur'an-docenten van Moskee Arrahma"
+    <Section title="Docenten"
+      sub={view === "uitbetalen"
+        ? "Maandelijkse uitbetalingen op basis van de planning × uurtarief"
+        : "Les- en Qur'an-docenten van Moskee Arrahma"}
       actions={
         <>
-          <SearchBox value={tools.q} onChange={tools.setQ} placeholder="Zoek docent…" />
-          <Btn icon="plus" kind="primary" onClick={() => setAdding(true)}>Docent toevoegen</Btn>
+          {view === "overzicht" && <SearchBox value={tools.q} onChange={tools.setQ} placeholder="Zoek docent…" />}
+          <Pills value={view} onChange={setView} options={VIEWS} />
+          {view === "overzicht" && <Btn icon="plus" kind="primary" onClick={() => setAdding(true)}>Docent toevoegen</Btn>}
         </>
       }>
+      {view === "uitbetalen" ? <TeacherPayouts /> : (
+        <>
       <BulkBar count={tools.selectedIds.length} noun="docent(en)" onClear={tools.clear} onDelete={onDelete} pending={del.isPending} />
       <Card>
         {isLoading ? <Loading /> : rows.length === 0 ? <div className="empty">{tools.q ? "Geen docenten gevonden." : "Nog geen docenten."}</div> : (
@@ -89,6 +103,8 @@ export function TeachersList() {
           </table>
         )}
       </Card>
+        </>
+      )}
 
       {adding && <TeacherFormModal initial={{ role: "les" } as Partial<Teacher>} onClose={() => setAdding(false)} />}
     </Section>
