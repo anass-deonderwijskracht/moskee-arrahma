@@ -14,6 +14,7 @@ import { KindDetail } from "@/features/kinderen/KindDetail";
 import { OudersList } from "@/features/ouders/OudersList";
 import { OuderDetail } from "@/features/ouders/OuderDetail";
 import { TeachersList } from "@/features/teachers/TeachersList";
+import { TeacherDetail } from "@/features/teachers/TeacherDetail";
 import { StudentsList } from "@/features/students/StudentsList";
 import { LeerlingDetail } from "@/features/students/LeerlingDetail";
 import { ClassesList } from "@/features/classes/ClassesList";
@@ -46,6 +47,7 @@ export function App() {
                   <Route path="/ouders" element={<OudersList />} />
                   <Route path="/ouders/:id" element={<OuderDetail />} />
                   <Route path="/teachers" element={<TeachersList />} />
+                  <Route path="/teachers/:id" element={<TeacherDetail />} />
                   <Route path="/students" element={<StudentsList />} />
                   <Route path="/classes" element={<ClassesList />} />
                   <Route path="/enrollments" element={<EnrollmentsScreen />} />

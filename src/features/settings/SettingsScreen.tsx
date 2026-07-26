@@ -66,10 +66,10 @@ function GeneralSettings() {
   const toast = useToast();
   const { data: settings, isLoading } = useAppSettings();
   const save = useSaveSettings();
-  const [form, setForm] = useState({ name: "", address: "", phone: "", email: "", annual_amount_eur: 220, tuition_regulier_eur: 220, tuition_hifdh_eur: 350, terms: 3, sibling_discount: "" });
+  const [form, setForm] = useState({ name: "", address: "", city: "", phone: "", email: "", annual_amount_eur: 220, tuition_regulier_eur: 220, tuition_hifdh_eur: 350, terms: 3, sibling_discount: "" });
 
   useEffect(() => {
-    if (settings) setForm({ name: settings.name, address: settings.address ?? "", phone: settings.phone ?? "", email: settings.email ?? "", annual_amount_eur: settings.annual_amount_eur, tuition_regulier_eur: settings.tuition_regulier_eur, tuition_hifdh_eur: settings.tuition_hifdh_eur, terms: settings.terms, sibling_discount: settings.sibling_discount ?? "" });
+    if (settings) setForm({ name: settings.name, address: settings.address ?? "", city: settings.city ?? "", phone: settings.phone ?? "", email: settings.email ?? "", annual_amount_eur: settings.annual_amount_eur, tuition_regulier_eur: settings.tuition_regulier_eur, tuition_hifdh_eur: settings.tuition_hifdh_eur, terms: settings.terms, sibling_discount: settings.sibling_discount ?? "" });
   }, [settings]);
 
   if (isLoading || !settings) return <Loading />;
@@ -85,18 +85,9 @@ function GeneralSettings() {
         <div className="grid-3" style={{ gridTemplateColumns: "1fr 1fr" }}>
           <div className="field"><label>Naam</label><input className="input" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} /></div>
           <div className="field"><label>Adres</label><input className="input" value={form.address} onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))} /></div>
+          <div className="field"><label>Plaats</label><input className="input" placeholder="Bijv. Almere" value={form.city} onChange={(e) => setForm((f) => ({ ...f, city: e.target.value }))} /></div>
           <div className="field"><label>Telefoon</label><input className="input" value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} /></div>
           <div className="field"><label>E-mail</label><input className="input" value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} /></div>
-        </div>
-        <div className="flex justify-end mt-3"><Btn kind="primary" icon="check" disabled={save.isPending} onClick={onSave}>Opslaan</Btn></div>
-      </Card>
-      <Card title="Betaaltermijnen" sub="Het lesgeld zelf stel je per schooljaar in bij Instellingen → Schooljaren (gestaffeld per kind).">
-        <div className="grid-3" style={{ gridTemplateColumns: "1fr 1fr" }}>
-          <div className="field"><label>Termijnen</label>
-            <Select value={String(form.terms)} onChange={(e) => setForm((f) => ({ ...f, terms: parseInt(e.target.value) }))}>
-              <option value="1">1 (jaarlijks)</option><option value="3">3 (per kwartaal)</option><option value="10">10 (maandelijks)</option>
-            </Select>
-          </div>
         </div>
         <div className="flex justify-end mt-3"><Btn kind="primary" icon="check" disabled={save.isPending} onClick={onSave}>Opslaan</Btn></div>
       </Card>

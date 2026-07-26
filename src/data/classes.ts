@@ -36,7 +36,7 @@ export type ClassRow = Tables<"classes"> & {
 export type ClassMetrics = Views<"class_metrics">;
 
 /** Classes for a given school year (or all when schooljaarId is null), with teacher names. */
-export function useClasses(schooljaarId: string | null) {
+export function useClasses(schooljaarId: string | null | undefined) {
   return useQuery({
     queryKey: ["classes", schooljaarId],
     enabled: schooljaarId !== undefined,

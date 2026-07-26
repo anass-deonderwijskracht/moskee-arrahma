@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { Section, Card, Avatar, Badge, Btn, Select, type BadgeKind } from "@/components/ui";
-import { Modal, Field, ModalFooter } from "@/components/ui/Modal";
+import { useNavigate } from "react-router-dom";
+import { Section, Card, Avatar, Badge, Btn, type BadgeKind } from "@/components/ui";
 import { Loading, ErrorState } from "@/features/_shared/states";
 import { useToast } from "@/components/chrome/Toast";
 import { useTableTools, SortTh, SelectTh, SelectTd, SearchBox, BulkBar } from "@/features/_shared/tableTools";
-import { useTeachers, useSaveTeacher, useDeleteTeachers, type Teacher } from "@/data/people";
+import { useTeachers, useDeleteTeachers, type Teacher } from "@/data/people";
+import { TeacherFormModal } from "./TeacherFormModal";
 
 const ROLE_LABEL: Record<string, { label: string; kind: BadgeKind }> = {
   les: { label: "Lesdocent", kind: "info" },
@@ -13,12 +14,15 @@ const ROLE_LABEL: Record<string, { label: string; kind: BadgeKind }> = {
   inval: { label: "Invaldocent", kind: "warn" },
 };
 
+const eurRate = (n: number | null) =>
+  n == null ? "—" : "€" + n.toLocaleString("nl-NL", { minimumFractionDigits: 0, maximumFractionDigits: 2 }) + "/u";
+
 export function TeachersList() {
   const toast = useToast();
+  const navigate = useNavigate();
   const { data, isLoading, isError, error } = useTeachers();
-  const save = useSaveTeacher();
   const del = useDeleteTeachers();
-  const [editing, setEditing] = useState<Partial<Teacher> | null>(null);
+  const [adding, setAdding] = useState(false);
 
   const tools = useTableTools({
     rows: data ?? [],
@@ -29,6 +33,7 @@ export function TeachersList() {
       role: (t) => ROLE_LABEL[t.role]?.label ?? t.role,
       email: (t) => t.email,
       phone: (t) => t.phone,
+      uurtarief: (t) => t.uurtarief ?? -1,
       specialty: (t) => t.specialty,
     },
     initialSort: { key: "name", dir: "asc" },
@@ -36,13 +41,6 @@ export function TeachersList() {
   const rows = tools.view;
 
   if (isError) return <ErrorState error={error} />;
-
-  const onSave = async (t: Partial<Teacher>) => {
-    try {
-      await save.mutateAsync({ id: t.id, name: t.name ?? "", short: t.short ?? "", email: t.email ?? "", phone: t.phone ?? "", specialty: t.specialty ?? "", role: t.role ?? "les" });
-      toast(t.id ? "Docent bijgewerkt" : "Docent toegevoegd"); setEditing(null);
-    } catch (e) { toast("Opslaan mislukt: " + (e instanceof Error ? e.message : "")); }
-  };
 
   const onDelete = () => {
     const ids = tools.selectedIds;
@@ -55,7 +53,7 @@ export function TeachersList() {
       actions={
         <>
           <SearchBox value={tools.q} onChange={tools.setQ} placeholder="Zoek docent…" />
-          <Btn icon="plus" kind="primary" onClick={() => setEditing({ role: "les" })}>Docent toevoegen</Btn>
+          <Btn icon="plus" kind="primary" onClick={() => setAdding(true)}>Docent toevoegen</Btn>
         </>
       }>
       <BulkBar count={tools.selectedIds.length} noun="docent(en)" onClear={tools.clear} onDelete={onDelete} pending={del.isPending} />
@@ -66,6 +64,7 @@ export function TeachersList() {
               <SelectTh allChecked={tools.allChecked} onToggle={tools.toggleAll} />
               <SortTh label="Docent" k="name" sort={tools.sort} onSort={tools.toggleSort} />
               <SortTh label="Rol" k="role" sort={tools.sort} onSort={tools.toggleSort} />
+              <SortTh label="Uurtarief" k="uurtarief" sort={tools.sort} onSort={tools.toggleSort} style={{ textAlign: "right" }} />
               <SortTh label="E-mail" k="email" sort={tools.sort} onSort={tools.toggleSort} />
               <SortTh label="Telefoon" k="phone" sort={tools.sort} onSort={tools.toggleSort} />
               <SortTh label="Specialiteit" k="specialty" sort={tools.sort} onSort={tools.toggleSort} />
@@ -75,10 +74,11 @@ export function TeachersList() {
                 const role = ROLE_LABEL[t.role] ?? ROLE_LABEL.les;
                 const isChecked = tools.checked.has(t.id);
                 return (
-                  <tr key={t.id} onClick={() => setEditing(t)} className={isChecked ? "selected" : ""}>
+                  <tr key={t.id} onClick={() => navigate("/teachers/" + t.id)} className={isChecked ? "selected" : ""} style={{ cursor: "pointer" }}>
                     <SelectTd checked={isChecked} onToggle={(range) => tools.toggleOne(t.id, range)} label={`Selecteer ${t.name}`} />
                     <td><div className="flex items-center gap-3"><Avatar name={t.name} size="sm" /><div><div className="font-semibold">{t.name}</div><div className="text-xs text-subtle">{t.short}</div></div></div></td>
                     <td><Badge kind={role.kind}>{role.label}</Badge></td>
+                    <td className="num text-sm font-semibold" style={{ textAlign: "right" }}>{eurRate(t.uurtarief)}</td>
                     <td className="text-sm">{t.email}</td>
                     <td className="text-sm font-mono">{t.phone}</td>
                     <td className="text-sm text-muted">{t.specialty}</td>
@@ -90,21 +90,7 @@ export function TeachersList() {
         )}
       </Card>
 
-      {editing && (
-        <Modal title={editing.id ? "Docent bewerken" : "Docent toevoegen"} onClose={() => setEditing(null)}
-          footer={<ModalFooter onCancel={() => setEditing(null)} onSave={() => onSave(editing)} saving={save.isPending} disabled={!editing.name?.trim()} />}>
-          <div className="grid-3" style={{ gridTemplateColumns: "2fr 1fr" }}>
-            <Field label="Naam"><input className="input" value={editing.name ?? ""} onChange={(e) => setEditing((t) => ({ ...t, name: e.target.value }))} placeholder="Ustadh …" /></Field>
-            <Field label="Afkorting"><input className="input" value={editing.short ?? ""} onChange={(e) => setEditing((t) => ({ ...t, short: e.target.value }))} placeholder="M. Bakkali" /></Field>
-          </div>
-          <Field label="Rol"><Select value={editing.role ?? "les"} onChange={(e) => setEditing((t) => ({ ...t, role: e.target.value }))}><option value="les">Lesdocent</option><option value="quran">Qur'an-docent</option><option value="both">Les & Qur'an</option><option value="inval">Invaldocent</option></Select></Field>
-          <div className="grid-3" style={{ gridTemplateColumns: "1fr 1fr" }}>
-            <Field label="E-mail"><input className="input" type="email" value={editing.email ?? ""} onChange={(e) => setEditing((t) => ({ ...t, email: e.target.value }))} /></Field>
-            <Field label="Telefoon"><input className="input" value={editing.phone ?? ""} onChange={(e) => setEditing((t) => ({ ...t, phone: e.target.value }))} /></Field>
-          </div>
-          <Field label="Specialiteit"><input className="input" value={editing.specialty ?? ""} onChange={(e) => setEditing((t) => ({ ...t, specialty: e.target.value }))} /></Field>
-        </Modal>
-      )}
+      {adding && <TeacherFormModal initial={{ role: "les" } as Partial<Teacher>} onClose={() => setAdding(false)} />}
     </Section>
   );
 }

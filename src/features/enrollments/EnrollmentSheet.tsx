@@ -3,11 +3,11 @@ import { Badge, Btn, Icon, Select, EUR } from "@/components/ui";
 import { useToast } from "@/components/chrome/Toast";
 import {
   useUpdateEnrollmentStatus, useUpdateEnrollment, useUpdateEnrollmentParent,
-  useDeleteEnrollments, useUpsertPlacement, ENROLL_STATUSES,
-  type Enrollment, type Placement,
+  useDeleteEnrollments, useUpsertPlacement, usePlacementPayment, useSetPlacementPayment,
+  ENROLL_STATUSES, type Enrollment, type Placement,
 } from "@/data/enrollments";
 import type { Tables } from "@/types/database";
-import { useTuitionTiers } from "@/data/tuition";
+import { useTuitionTiers, useResolvedTuition, useSetLesgeldOverride } from "@/data/tuition";
 import { ENROLL_COLUMNS } from "@/data/dashboard";
 
 const STATUS_TITLE: Record<string, string> = Object.fromEntries(ENROLL_COLUMNS.map((c) => [c.id, c.title]));
@@ -49,32 +49,72 @@ export function EnrollmentSheet({ item, onClose, schooljaarId, placement }: {
   };
 
   // ---- Financiën (alleen met schooljaar-context) ----
+  // Vóór finalisatie is de plaatsing de opslag. Zodra er een leerling is, is die
+  // de bron: te betalen wordt de lesgeld-override, betaald een payments-regel.
+  const leerlingId = placement?.leerling_id ?? null;
+  const finalised = !!leerlingId;
+  const tuition = useResolvedTuition(schooljaarId);
+  const { data: placementPayment } = usePlacementPayment(placement?.id, leerlingId);
+  const setPlacementPayment = useSetPlacementPayment();
+  const setOverride = useSetLesgeldOverride();
+
   const staffelDefault = useMemo(() => {
     const first = (tiers ?? []).filter((t) => t.track === item.track).sort((a, b) => a.rang - b.rang)[0];
     return first ? Number(first.bedrag) : 0;
   }, [tiers, item.track]);
-  const overridden = placement?.lesgeld_verschuldigd != null;
-  const teBetalen = overridden ? Number(placement!.lesgeld_verschuldigd) : staffelDefault;
-  const betaald = placement?.lesgeld_bedrag != null ? Number(placement.lesgeld_bedrag) : 0;
-  const openstaand = teBetalen - betaald;
-  const afgerond = teBetalen > 0 && betaald >= teBetalen;
+
+  const resolved = leerlingId ? tuition.get(leerlingId) ?? null : null;
+  // Bedrag waarop "leeg of gelijk = geen override" wordt getoetst.
+  const basisBedrag = finalised ? resolved?.tierAmount ?? 0 : staffelDefault;
+  const overridden = finalised ? !!resolved?.overridden : placement?.lesgeld_verschuldigd != null;
+  const teBetalen = finalised
+    ? resolved?.amount ?? staffelDefault
+    : overridden ? Number(placement!.lesgeld_verschuldigd) : staffelDefault;
+  const betaald = finalised
+    ? placementPayment?.placementPaid ?? 0
+    : placement?.lesgeld_bedrag != null ? Number(placement.lesgeld_bedrag) : 0;
+  const totaalVoldaan = finalised ? placementPayment?.totalPaid ?? 0 : betaald;
+  const openstaand = teBetalen - totaalVoldaan;
+  const afgerond = teBetalen > 0 && totaalVoldaan >= teBetalen;
 
   const patchPlacement = (p: { lesgeld_bedrag?: number | null; lesgeld_verschuldigd?: number | null }) => {
     if (!schooljaarId) return;
     upsert.mutate({ enrollment_id: item.id, schooljaar_id: schooljaarId, ...p }, { onError: () => toast("Opslaan mislukt") });
   };
-  const onTeBetalenBlur = (raw: string) => {
+  const parseAmount = (raw: string): number | null | undefined => {
     const v = raw.trim();
-    const num = v === "" ? null : parseFloat(v);
-    if (num !== null && Number.isNaN(num)) return;
-    const next = num === null || num === staffelDefault ? null : num; // gelijk aan staffel → geen override
-    if (next !== (placement?.lesgeld_verschuldigd ?? null)) patchPlacement({ lesgeld_verschuldigd: next });
+    if (v === "") return null;
+    const n = parseFloat(v);
+    return Number.isNaN(n) ? undefined : n; // undefined = ongeldig, niet opslaan
   };
+
+  const onTeBetalenBlur = (raw: string) => {
+    const num = parseAmount(raw);
+    if (num === undefined) return;
+    if (finalised && !resolved) return; // staffel nog niet geladen — niets overschrijven
+    const next = num === null || num === basisBedrag ? null : num; // gelijk aan staffel → geen override
+    if (finalised) {
+      const huidig = resolved?.overridden ? resolved.amount : null;
+      if (next !== huidig) setOverride.mutate({ leerlingId: leerlingId!, value: next }, { onError: () => toast("Opslaan mislukt") });
+    } else if (next !== (placement?.lesgeld_verschuldigd ?? null)) {
+      patchPlacement({ lesgeld_verschuldigd: next });
+    }
+  };
+
   const onBetaaldBlur = (raw: string) => {
-    const v = raw.trim();
-    const num = v === "" ? null : parseFloat(v);
-    if (num !== null && Number.isNaN(num)) return;
-    if (num !== (placement?.lesgeld_bedrag ?? null)) patchPlacement({ lesgeld_bedrag: num });
+    const num = parseAmount(raw);
+    if (num === undefined) return;
+    if (finalised) {
+      if (!placementPayment) return; // betalingen nog niet geladen
+      const next = num ?? 0;
+      if (next === betaald) return;
+      setPlacementPayment.mutate(
+        { placementId: placement!.id, leerlingId: leerlingId!, paymentId: placementPayment?.paymentId ?? null, amount: next },
+        { onError: () => toast("Opslaan mislukt") },
+      );
+    } else if (num !== (placement?.lesgeld_bedrag ?? null)) {
+      patchPlacement({ lesgeld_bedrag: num });
+    }
   };
 
   const settable = ENROLL_STATUSES.filter((s) => s !== "definitief");
@@ -127,11 +167,14 @@ export function EnrollmentSheet({ item, onClose, schooljaarId, placement }: {
                   </div>
                 </div>
                 <div>
-                  <label style={lbl}>Betaald</label>
+                  <label style={lbl}>Betaald{finalised ? " (bij inschrijving)" : ""}</label>
                   <div style={{ position: "relative" }}>
                     <span style={{ position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)", color: "var(--fg-faint)", fontSize: 13 }}>€</span>
-                    <input key={`bt:${betaald}`} className="input" type="number" min={0} step={10} defaultValue={placement?.lesgeld_bedrag ?? ""} placeholder="0" onBlur={(e) => onBetaaldBlur(e.target.value)} style={{ paddingLeft: 20, fontFamily: "var(--mono)" }} />
+                    <input key={`bt:${betaald}`} className="input" type="number" min={0} step={10} defaultValue={betaald || ""} placeholder="0" onBlur={(e) => onBetaaldBlur(e.target.value)} style={{ paddingLeft: 20, fontFamily: "var(--mono)" }} />
                   </div>
+                  {finalised && totaalVoldaan !== betaald && (
+                    <div className="text-xs text-subtle" style={{ marginTop: 4 }}>Totaal voldaan op de leerling: {EUR(totaalVoldaan)}</div>
+                  )}
                 </div>
                 <div>
                   <div className="text-xs text-subtle">Verschuldigd (openstaand)</div>
@@ -139,9 +182,14 @@ export function EnrollmentSheet({ item, onClose, schooljaarId, placement }: {
                 </div>
                 <div>
                   <div className="text-xs text-subtle">Status betaling</div>
-                  {afgerond ? <Badge kind="success" dot>Volledig voldaan</Badge> : <Badge kind="warn" dot>{betaald > 0 ? "Deels betaald" : "Open"}</Badge>}
+                  {afgerond ? <Badge kind="success" dot>Volledig voldaan</Badge> : <Badge kind="warn" dot>{totaalVoldaan > 0 ? "Deels betaald" : "Open"}</Badge>}
                 </div>
               </div>
+              {finalised && (
+                <div className="text-xs text-subtle" style={{ marginTop: 8 }}>
+                  Deze bedragen staan op de leerling. Verdere termijnen registreer je op de leerlingpagina.
+                </div>
+              )}
             </div>
           )}
 

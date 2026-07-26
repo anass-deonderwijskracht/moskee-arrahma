@@ -46,7 +46,7 @@ export type LeerlingRow = Tables<"leerlingen"> & {
 export type LeerlingMetrics = Views<"leerling_metrics">;
 
 /** Leerlingen (per-year enrollments) for a school year, with kind + class joined. */
-export function useLeerlingen(schooljaarId: string | null) {
+export function useLeerlingen(schooljaarId: string | null | undefined) {
   return useQuery({
     queryKey: ["leerlingen", schooljaarId],
     enabled: schooljaarId !== undefined,

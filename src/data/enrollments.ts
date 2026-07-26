@@ -182,6 +182,74 @@ export function useUpdateFinalizedLeerling() {
   });
 }
 
+// ---------------------------------------------------------------------------
+// Inschrijvingsbetaling — zodra een plaatsing definitief is, is de leerling de
+// financiële bron. Het "Betaald"-veld in het zijpaneel beheert dan één
+// payments-regel op de leerling, gekoppeld via placement_id.
+// ---------------------------------------------------------------------------
+export interface PlacementPayment {
+  /** Betaling die bij deze inschrijving hoort; null als die er nog niet is. */
+  paymentId: string | null;
+  placementPaid: number;
+  /** Alle voldane betalingen van de leerling — kan hoger zijn (extra termijnen). */
+  totalPaid: number;
+}
+
+export function usePlacementPayment(placementId: string | null | undefined, leerlingId: string | null | undefined) {
+  return useQuery({
+    queryKey: ["placement-payment", leerlingId, placementId],
+    enabled: !!leerlingId,
+    queryFn: async (): Promise<PlacementPayment> => {
+      const { data, error } = await supabase
+        .from("payments")
+        .select("id, amount, status, placement_id")
+        .eq("leerling_id", leerlingId!);
+      if (error) throw error;
+      const rows = (data ?? []) as { id: string; amount: number; status: string; placement_id: string | null }[];
+      const own = placementId ? rows.find((r) => r.placement_id === placementId) : undefined;
+      return {
+        paymentId: own?.id ?? null,
+        placementPaid: own ? Number(own.amount) : 0,
+        totalPaid: rows.filter((r) => r.status === "paid").reduce((a, r) => a + Number(r.amount), 0),
+      };
+    },
+  });
+}
+
+/** Zet het bij de inschrijving betaalde bedrag; null/0 verwijdert de regel. */
+export function useSetPlacementPayment() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ placementId, leerlingId, paymentId, amount }: {
+      placementId: string; leerlingId: string; paymentId: string | null; amount: number | null;
+    }) => {
+      if (amount === null || amount === 0) {
+        if (!paymentId) return;
+        const { error } = await supabase.from("payments").delete().eq("id", paymentId);
+        if (error) throw error;
+        return;
+      }
+      if (paymentId) {
+        const { error } = await supabase.from("payments").update({ amount, status: "paid" } as never).eq("id", paymentId);
+        if (error) throw error;
+        return;
+      }
+      const { error } = await supabase.from("payments").insert({
+        leerling_id: leerlingId, placement_id: placementId, date: new Date().toISOString().slice(0, 10),
+        description: "Lesgeld inschrijving", amount, status: "paid",
+      } as never);
+      if (error) throw error;
+    },
+    onSuccess: (_d, v) => {
+      qc.invalidateQueries({ queryKey: ["placement-payment"] });
+      qc.invalidateQueries({ queryKey: ["payments-by-leerling"] });
+      qc.invalidateQueries({ queryKey: ["leerling-detail", v.leerlingId] });
+      qc.invalidateQueries({ queryKey: ["finance"] });
+      qc.invalidateQueries({ queryKey: ["dashboard"] });
+    },
+  });
+}
+
 export function useFinalizeEnrollment() {
   const qc = useQueryClient();
   return useMutation({
@@ -195,6 +263,10 @@ export function useFinalizeEnrollment() {
       qc.invalidateQueries({ queryKey: ["enrollments-full"] });
       qc.invalidateQueries({ queryKey: ["nav-counts"] });
       qc.invalidateQueries({ queryKey: ["leerlingen"] });
+      // De RPC legt het bij de inschrijving betaalde lesgeld vast als betaling.
+      qc.invalidateQueries({ queryKey: ["payments-by-leerling"] });
+      qc.invalidateQueries({ queryKey: ["placement-payment"] });
+      qc.invalidateQueries({ queryKey: ["finance"] });
     },
   });
 }

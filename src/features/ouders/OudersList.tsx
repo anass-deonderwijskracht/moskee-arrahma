@@ -4,8 +4,10 @@ import { Section, Card, Avatar, Icon, Btn, Select } from "@/components/ui";
 import { Modal, Field, ModalFooter } from "@/components/ui/Modal";
 import { Loading, ErrorState } from "@/features/_shared/states";
 import { useToast } from "@/components/chrome/Toast";
-import { useTableTools, SortTh, SelectTh, SelectTd, SearchBox, BulkBar } from "@/features/_shared/tableTools";
-import { useOuders, useCreateOuder, useDeleteOuders } from "@/data/people";
+import { useTableTools, SortTh, SelectTh, SelectTd, SearchBox, BulkBar, EditToggle, EditableTd } from "@/features/_shared/tableTools";
+import { useOuders, useCreateOuder, useDeleteOuders, useUpdateOuder, type Ouder } from "@/data/people";
+
+const ROLLEN = ["Vader", "Moeder", "Voogd"];
 
 export function OudersList() {
   const navigate = useNavigate();
@@ -13,7 +15,11 @@ export function OudersList() {
   const { data, isLoading, isError, error } = useOuders();
   const createOuder = useCreateOuder();
   const del = useDeleteOuders();
+  const update = useUpdateOuder();
+  const [editing, setEditing] = useState(false);
   const [adding, setAdding] = useState(false);
+  const save = (id: string, patch: Partial<Ouder>) =>
+    update.mutate({ id, patch }, { onError: () => toast("Opslaan mislukt") });
   const [form, setForm] = useState({ role: "Vader", name: "", phone: "", email: "", bereik: "", primary: true });
   const saveOuder = async () => {
     try {
@@ -54,6 +60,7 @@ export function OudersList() {
       actions={
         <>
           <SearchBox value={tools.q} onChange={tools.setQ} placeholder="Zoek ouder…" />
+          <EditToggle editing={editing} onToggle={() => setEditing((v) => !v)} />
           <Btn icon="plus" kind="primary" onClick={() => setAdding(true)}>Ouder toevoegen</Btn>
         </>
       }
@@ -81,19 +88,32 @@ export function OudersList() {
               {rows.map((o) => {
                 const isChecked = tools.checked.has(o.id);
                 return (
-                <tr key={o.id} onClick={() => navigate("/ouders/" + o.id)} className={isChecked ? "selected" : ""}>
+                <tr key={o.id} onClick={editing ? undefined : () => navigate("/ouders/" + o.id)} className={isChecked ? "selected" : ""}>
                   <SelectTd checked={isChecked} onToggle={(range) => tools.toggleOne(o.id, range)} label={`Selecteer ${o.name}`} />
-                  <td>
+                  <td onClick={editing ? (e) => e.stopPropagation() : undefined}>
                     <div className="flex items-center gap-3">
                       <Avatar name={o.name} size="sm" />
-                      <div>
-                        <div className="font-semibold">{o.name}</div>
-                        <div className="text-xs text-subtle">{o.role}</div>
-                      </div>
+                      {editing ? (
+                        <div className="flex-col gap-1" style={{ minWidth: 180 }}>
+                          <input key={o.name} className="input" defaultValue={o.name}
+                            onBlur={(e) => { const v = e.target.value.trim(); if (v && v !== o.name) save(o.id, { name: v }); }} />
+                          <Select value={o.role ?? ""} onChange={(e) => save(o.id, { role: e.target.value || null })} style={{ fontSize: 12 }}>
+                            <option value="">—</option>
+                            {ROLLEN.map((r) => <option key={r} value={r}>{r}</option>)}
+                          </Select>
+                        </div>
+                      ) : (
+                        <div>
+                          <div className="font-semibold">{o.name}</div>
+                          <div className="text-xs text-subtle">{o.role}</div>
+                        </div>
+                      )}
                     </div>
                   </td>
-                  <td className="text-sm font-mono">{o.phone}</td>
-                  <td className="text-sm">{o.email}</td>
+                  <EditableTd editing={editing} className="text-sm font-mono" value={o.phone ?? ""} type="tel"
+                    onSave={(v) => save(o.id, { phone: v.trim() || null })} />
+                  <EditableTd editing={editing} className="text-sm" value={o.email ?? ""} type="email"
+                    onSave={(v) => save(o.id, { email: v.trim() || null })} />
                   <td>
                     <div className="av-group">
                       {o.kind_ouder.slice(0, 4).map((ko) => (
@@ -101,8 +121,9 @@ export function OudersList() {
                       ))}
                     </div>
                   </td>
-                  <td className="text-sm text-muted">{o.bereik}</td>
-                  <td><Icon name="chevronRight" size={14} /></td>
+                  <EditableTd editing={editing} className="text-sm text-muted" value={o.bereik ?? ""}
+                    placeholder="bv. Werkdagen na 17:00" onSave={(v) => save(o.id, { bereik: v.trim() || null })} />
+                  <td>{!editing && <Icon name="chevronRight" size={14} />}</td>
                 </tr>
                 );
               })}

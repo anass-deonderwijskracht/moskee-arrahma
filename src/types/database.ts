@@ -41,7 +41,7 @@ export interface Database {
       };
       app_settings: {
         Row: {
-          id: string; name: string; address: string | null; phone: string | null;
+          id: string; name: string; address: string | null; city: string | null; phone: string | null;
           email: string | null; annual_amount_eur: number; terms: number;
           sibling_discount: string | null; singleton: boolean; updated_at: string;
           tuition_regulier_eur: number; tuition_hifdh_eur: number;
@@ -75,6 +75,7 @@ export interface Database {
         Row: {
           id: string; name: string; short: string | null; email: string | null;
           phone: string | null; joined: string | null; specialty: string | null; role: string;
+          uurtarief: number | null;
         } & Timestamps;
         Insert: Partial<Database["public"]["Tables"]["teachers"]["Row"]> & { name: string };
         Update: Partial<Database["public"]["Tables"]["teachers"]["Row"]>;
@@ -224,7 +225,7 @@ export interface Database {
       payments: {
         Row: {
           id: string; leerling_id: string; date: string | null; description: string | null;
-          amount: number; status: string; method: string | null;
+          amount: number; status: string; method: string | null; placement_id: string | null;
         } & Timestamps;
         Insert: { leerling_id: string } & Partial<Database["public"]["Tables"]["payments"]["Row"]>;
         Update: Partial<Database["public"]["Tables"]["payments"]["Row"]>;

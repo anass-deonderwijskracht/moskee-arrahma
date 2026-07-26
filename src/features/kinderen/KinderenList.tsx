@@ -4,8 +4,8 @@ import { Section, Card, Avatar, Icon, Btn, Select } from "@/components/ui";
 import { Modal, Field, ModalFooter } from "@/components/ui/Modal";
 import { Loading, ErrorState } from "@/features/_shared/states";
 import { useToast } from "@/components/chrome/Toast";
-import { useTableTools, SortTh, SelectTh, SelectTd, SearchBox, BulkBar } from "@/features/_shared/tableTools";
-import { useKinderen, useCreateKind, useDeleteKinderen, type KindRow } from "@/data/people";
+import { useTableTools, SortTh, SelectTh, SelectTd, SearchBox, BulkBar, EditToggle } from "@/features/_shared/tableTools";
+import { useKinderen, useCreateKind, useDeleteKinderen, useUpdateKind, type KindRow } from "@/data/people";
 import { useCurrentSchooljaar } from "@/data/schooljaren";
 
 const currentYear = new Date().getFullYear();
@@ -17,7 +17,19 @@ export function KinderenList() {
   const { data: sj } = useCurrentSchooljaar();
   const createKind = useCreateKind();
   const del = useDeleteKinderen();
+  const update = useUpdateKind();
+  const [editing, setEditing] = useState(false);
   const [adding, setAdding] = useState(false);
+  // Een naamswijziging gaat mee als `name`, zodat de initialen opnieuw worden afgeleid.
+  const saveName = (k: KindRow, patch: { first_name?: string; last_name?: string }) => {
+    const first = (patch.first_name ?? k.first_name).trim();
+    const last = (patch.last_name ?? k.last_name).trim();
+    if (!first || !last || (first === k.first_name && last === k.last_name)) return;
+    update.mutate({ id: k.id, patch: { first_name: first, last_name: last }, name: { first_name: first, last_name: last } },
+      { onError: () => toast("Opslaan mislukt") });
+  };
+  const saveField = (id: string, patch: { gender?: string | null; birth_year?: number | null }) =>
+    update.mutate({ id, patch }, { onError: () => toast("Opslaan mislukt") });
   const [form, setForm] = useState({ first_name: "", last_name: "", gender: "", birth_year: "", address: "" });
   const saveKind = async () => {
     try {
@@ -59,6 +71,7 @@ export function KinderenList() {
       actions={
         <>
           <SearchBox value={tools.q} onChange={tools.setQ} placeholder="Zoek kind…" />
+          <EditToggle editing={editing} onToggle={() => setEditing((v) => !v)} />
           <Btn icon="plus" kind="primary" onClick={() => setAdding(true)}>Kind toevoegen</Btn>
         </>
       }
@@ -76,7 +89,7 @@ export function KinderenList() {
                 <SelectTh allChecked={tools.allChecked} onToggle={tools.toggleAll} />
                 <SortTh label="Kind" k="name" sort={tools.sort} onSort={tools.toggleSort} />
                 <SortTh label="Geslacht" k="gender" sort={tools.sort} onSort={tools.toggleSort} />
-                <SortTh label="Leeftijd" k="age" sort={tools.sort} onSort={tools.toggleSort} />
+                <SortTh label={editing ? "Geboortejaar" : "Leeftijd"} k="age" sort={tools.sort} onSort={tools.toggleSort} />
                 <SortTh label="Huidig jaar (klas)" k="klas" sort={tools.sort} onSort={tools.toggleSort} />
                 <th>Ouders</th>
                 <th style={{ width: 1 }}></th>
@@ -88,16 +101,44 @@ export function KinderenList() {
                 const age = k.birth_year ? currentYear - k.birth_year : null;
                 const isChecked = tools.checked.has(k.id);
                 return (
-                  <tr key={k.id} onClick={() => navigate("/kinderen/" + k.id)} className={isChecked ? "selected" : ""}>
+                  <tr key={k.id} onClick={editing ? undefined : () => navigate("/kinderen/" + k.id)} className={isChecked ? "selected" : ""}>
                     <SelectTd checked={isChecked} onToggle={(range) => tools.toggleOne(k.id, range)} label={`Selecteer ${k.full_name}`} />
-                    <td>
+                    <td onClick={editing ? (e) => e.stopPropagation() : undefined}>
                       <div className="flex items-center gap-3">
                         <Avatar name={k.full_name} initials={k.initials ?? undefined} size="sm" />
-                        <div className="font-semibold">{k.full_name}</div>
+                        {editing ? (
+                          <div className="flex gap-2">
+                            <input key={`v:${k.first_name}`} className="input" defaultValue={k.first_name} aria-label="Voornaam"
+                              style={{ width: 120 }} onBlur={(e) => saveName(k, { first_name: e.target.value })} />
+                            <input key={`a:${k.last_name}`} className="input" defaultValue={k.last_name} aria-label="Achternaam"
+                              style={{ width: 140 }} onBlur={(e) => saveName(k, { last_name: e.target.value })} />
+                          </div>
+                        ) : (
+                          <div className="font-semibold">{k.full_name}</div>
+                        )}
                       </div>
                     </td>
-                    <td className="text-sm">{k.gender === "f" ? "Meisje" : k.gender === "m" ? "Jongen" : "—"}</td>
-                    <td className="num">{age ?? "—"}</td>
+                    <td className="text-sm" onClick={editing ? (e) => e.stopPropagation() : undefined}>
+                      {editing ? (
+                        <Select value={k.gender ?? ""} onChange={(e) => saveField(k.id, { gender: e.target.value || null })} style={{ width: 100 }}>
+                          <option value="">—</option>
+                          <option value="m">Jongen</option>
+                          <option value="f">Meisje</option>
+                        </Select>
+                      ) : k.gender === "f" ? "Meisje" : k.gender === "m" ? "Jongen" : "—"}
+                    </td>
+                    <td className="num" onClick={editing ? (e) => e.stopPropagation() : undefined}>
+                      {editing ? (
+                        <input key={`gj:${k.birth_year}`} className="input" type="number" placeholder="geb.jaar" aria-label="Geboortejaar"
+                          style={{ width: 92 }} defaultValue={k.birth_year ?? ""}
+                          onBlur={(e) => {
+                            const v = e.target.value.trim();
+                            const n = v === "" ? null : parseInt(v, 10);
+                            if (n !== null && Number.isNaN(n)) return;
+                            if (n !== k.birth_year) saveField(k.id, { birth_year: n });
+                          }} />
+                      ) : age ?? "—"}
+                    </td>
                     <td className="text-sm">{current?.classes?.code ?? <span className="text-subtle">geen</span>}</td>
                     <td>
                       <div className="av-group">
@@ -106,7 +147,7 @@ export function KinderenList() {
                         ))}
                       </div>
                     </td>
-                    <td><Icon name="chevronRight" size={14} /></td>
+                    <td>{!editing && <Icon name="chevronRight" size={14} />}</td>
                   </tr>
                 );
               })}

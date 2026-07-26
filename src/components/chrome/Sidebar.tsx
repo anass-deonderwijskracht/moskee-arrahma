@@ -1,12 +1,14 @@
 import { NavLink } from "react-router-dom";
 import { Icon, type IconName } from "@/components/ui";
 import { useNavCounts } from "@/data/counts";
+import { useAppSettings } from "@/data/finance";
 import { useSession } from "@/features/auth/AuthProvider";
 
 type NavItem = { group?: string; id?: string; to?: string; label?: string; icon?: IconName; countKey?: string };
 
 export function Sidebar({ collapsed, setCollapsed }: { collapsed: boolean; setCollapsed: (v: boolean) => void }) {
   const { data: counts } = useNavCounts();
+  const { data: settings } = useAppSettings();
   const { fullName, signOut, isDocent, classId } = useSession();
 
   const items: NavItem[] = isDocent
@@ -38,11 +40,10 @@ export function Sidebar({ collapsed, setCollapsed }: { collapsed: boolean; setCo
   return (
     <aside className="sidebar">
       <div className="sidebar-brand">
-        <div className="mark" style={{ fontWeight: 600, fontSize: 14, letterSpacing: "-0.02em" }}>M</div>
         {!collapsed && (
           <div>
             <div className="name">Moskee Arrahma</div>
-            <div className="sub">Weekendonderwijs · Almere</div>
+            <div className="sub">Weekendonderwijs{settings?.city ? ` · ${settings.city}` : ""}</div>
           </div>
         )}
       </div>

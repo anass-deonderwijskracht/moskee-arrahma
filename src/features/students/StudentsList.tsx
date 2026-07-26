@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Section, Card, Avatar, Icon, Btn, Select, Badge, pct, metricKind } from "@/components/ui";
+import { Section, Card, Avatar, Icon, Btn, Select, Badge, EUR, pct, metricKind } from "@/components/ui";
 import { Modal, Field, ModalFooter } from "@/components/ui/Modal";
 import { Loading, ErrorState } from "@/features/_shared/states";
 import { useToast } from "@/components/chrome/Toast";
@@ -9,7 +9,7 @@ import { useLeerlingen, useLeerlingMetrics, useCreateLeerling, useDeleteLeerling
 import { useClasses } from "@/data/classes";
 import { useKinderen } from "@/data/people";
 import { useSchooljaren, useCurrentSchooljaar } from "@/data/schooljaren";
-import { useTuitionTiers, useFamilyLinks, useSetLesgeldOverride, resolveTuition } from "@/data/tuition";
+import { useSetLesgeldOverride, useResolvedTuition, usePaymentsByLeerling } from "@/data/tuition";
 
 const NIVEAUS = ["0 (beginner)", "0,5", "1", "1,5", "2"];
 
@@ -51,22 +51,11 @@ export function StudentsList() {
   const m = metrics ?? {};
 
   // Verschuldigd lesgeld per leerling — staffel per traject + gezinsrang, override wint.
-  const { data: tiers } = useTuitionTiers(effectiveSj);
-  const { data: familyLinks } = useFamilyLinks();
+  const tuition = useResolvedTuition(effectiveSj);
+  const { data: payments } = usePaymentsByLeerling(effectiveSj);
   const setOverride = useSetLesgeldOverride();
-  const trackByClass = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const c of yearClasses ?? []) map.set(c.id, c.track);
-    return map;
-  }, [yearClasses]);
-  const tuition = useMemo(
-    () => resolveTuition(
-      (data ?? []).map((l) => ({ id: l.id, kind_id: l.kind_id, birth_year: l.kinderen?.birth_year ?? null, track: trackByClass.get(l.class_id) ?? null, override: l.lesgeld_override })),
-      familyLinks ?? [],
-      tiers ?? [],
-    ),
-    [data, trackByClass, familyLinks, tiers],
-  );
+  const paidOf = (id: string) => payments?.get(id)?.paid ?? 0;
+  const openOf = (id: string) => (tuition.get(id)?.amount ?? 0) - paidOf(id);
 
   const classFiltered = useMemo(
     () => (data ?? []).filter((l) => !classFilter || l.class_id === classFilter),
@@ -87,6 +76,8 @@ export function StudentsList() {
       quran: (l) => m[l.id]?.quran_learned_pct,
       surahs: (l) => m[l.id]?.surahs_known,
       lesgeld: (l) => tuition.get(l.id)?.amount ?? -1,
+      betaald: (l) => paidOf(l.id),
+      open: (l) => openOf(l.id),
     },
     initialSort: { key: "name", dir: "asc" },
   });
@@ -154,6 +145,8 @@ export function StudentsList() {
                 <SortTh label="Qur'an" k="quran" sort={tools.sort} onSort={tools.toggleSort} />
                 <SortTh label="Surahs" k="surahs" sort={tools.sort} onSort={tools.toggleSort} />
                 <SortTh label="Verschuldigd" k="lesgeld" sort={tools.sort} onSort={tools.toggleSort} />
+                <SortTh label="Betaald" k="betaald" sort={tools.sort} onSort={tools.toggleSort} />
+                <SortTh label="Open" k="open" sort={tools.sort} onSort={tools.toggleSort} />
                 <th style={{ width: 1 }}></th>
               </tr>
             </thead>
@@ -200,6 +193,15 @@ export function StudentsList() {
                             {res?.overridden && <button className="btn ghost sm" title="Terug naar staffel" onClick={() => setOverride.mutate({ leerlingId: l.id, value: null })}><Icon name="x" size={11} /></button>}
                           </div>
                         );
+                      })()}
+                    </td>
+                    <td className="num">{EUR(paidOf(l.id))}</td>
+                    <td>
+                      {(() => {
+                        const rest = openOf(l.id);
+                        return rest <= 0
+                          ? <Badge kind="success" dot>voldaan</Badge>
+                          : <Badge kind="warn" dot>{EUR(rest)}</Badge>;
                       })()}
                     </td>
                     <td><Icon name="chevronRight" size={14} /></td>

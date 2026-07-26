@@ -132,6 +132,47 @@ export function SearchBox({ value, onChange, placeholder, width = 240 }: {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Bewerkmodus — één knop zet de hele tabel in de bewerkstand; cellen worden dan
+// invoervelden die automatisch opslaan zodra je ze verlaat.
+// ---------------------------------------------------------------------------
+
+/** Zet de tabel in of uit de bewerkstand. Hoort in de `actions` van de Section. */
+export function EditToggle({ editing, onToggle }: { editing: boolean; onToggle: () => void }) {
+  return (
+    <Btn kind={editing ? "primary" : "default"} icon={editing ? "check" : "edit"} onClick={onToggle}>
+      {editing ? "Klaar" : "Bewerken"}
+    </Btn>
+  );
+}
+
+/** Cel die buiten de bewerkstand gewone inhoud toont en erin een invoerveld wordt.
+ *  Slaat alleen op als de waarde daadwerkelijk veranderde. */
+export function EditableTd({ editing, value, onSave, type = "text", placeholder, className, style, inputStyle, children }: {
+  editing: boolean;
+  /** Huidige waarde; ook de vergelijkingsbasis bij het opslaan. */
+  value: string;
+  onSave: (next: string) => void;
+  type?: "text" | "number" | "email" | "tel";
+  placeholder?: string;
+  className?: string;
+  style?: CSSProperties;
+  inputStyle?: CSSProperties;
+  /** Weergave buiten de bewerkstand; standaard de waarde zelf. */
+  children?: ReactNode;
+}) {
+  if (!editing) return <td className={className} style={style}>{children ?? value}</td>;
+  return (
+    <td style={style} onClick={(e) => e.stopPropagation()}>
+      <input
+        key={value} className="input" type={type} placeholder={placeholder} defaultValue={value}
+        style={inputStyle}
+        onBlur={(e) => { if (e.target.value !== value) onSave(e.target.value); }}
+      />
+    </td>
+  );
+}
+
 /** Bulk-action bar shown above a table when one or more rows are selected. */
 export function BulkBar({ count, onClear, onDelete, pending, noun = "rij(en)" }: {
   count: number; onClear: () => void; onDelete: () => void; pending?: boolean; noun?: string;

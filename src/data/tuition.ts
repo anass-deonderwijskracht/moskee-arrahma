@@ -1,13 +1,16 @@
+import { useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import type { Tables } from "@/types/database";
+import { useLeerlingen } from "@/data/leerlingen";
+import { useClasses } from "@/data/classes";
 
 export type TuitionTier = Tables<"tuition_tiers">;
 export const TRACKS = ["regulier", "hifdh"] as const;
 export type Track = (typeof TRACKS)[number];
 
 /** Tiers for one school year, both tracks, sorted by rang. */
-export function useTuitionTiers(schooljaarId: string | null) {
+export function useTuitionTiers(schooljaarId: string | null | undefined) {
   return useQuery({
     queryKey: ["tuition-tiers", schooljaarId],
     enabled: !!schooljaarId,
@@ -165,4 +168,57 @@ export function resolveTuition(
     });
   }
   return out;
+}
+
+// ---------------------------------------------------------------------------
+// Gedeelde afleidingen — één bron voor de Leerlingen-tabel én het
+// inschrijvings-zijpaneel, zodat beide gegarandeerd hetzelfde rekenen.
+// ---------------------------------------------------------------------------
+
+/** Verschuldigd lesgeld per leerling voor één schooljaar (staffel + override). */
+export function useResolvedTuition(schooljaarId: string | null | undefined) {
+  const { data: leerlingen } = useLeerlingen(schooljaarId);
+  const { data: classes } = useClasses(schooljaarId);
+  const { data: links } = useFamilyLinks();
+  const { data: tiers } = useTuitionTiers(schooljaarId);
+
+  return useMemo(() => {
+    const trackByClass = new Map<string, string>();
+    for (const c of classes ?? []) trackByClass.set(c.id, c.track);
+    return resolveTuition(
+      (leerlingen ?? []).map((l) => ({
+        id: l.id, kind_id: l.kind_id,
+        birth_year: l.kinderen?.birth_year ?? null,
+        track: trackByClass.get(l.class_id) ?? null,
+        override: l.lesgeld_override,
+      })),
+      links ?? [],
+      tiers ?? [],
+    );
+  }, [leerlingen, classes, links, tiers]);
+}
+
+export interface LeerlingPayments { paid: number; open: number }
+
+/** Betaald (status paid) en nog open per leerling, voor één schooljaar. */
+export function usePaymentsByLeerling(schooljaarId: string | null) {
+  return useQuery({
+    queryKey: ["payments-by-leerling", schooljaarId],
+    enabled: !!schooljaarId,
+    queryFn: async (): Promise<Map<string, LeerlingPayments>> => {
+      const { data, error } = await supabase
+        .from("payments")
+        .select("leerling_id, amount, status, leerlingen!inner(schooljaar_id)")
+        .eq("leerlingen.schooljaar_id", schooljaarId!);
+      if (error) throw error;
+      const map = new Map<string, LeerlingPayments>();
+      for (const p of (data ?? []) as unknown as { leerling_id: string; amount: number; status: string }[]) {
+        const cur = map.get(p.leerling_id) ?? { paid: 0, open: 0 };
+        if (p.status === "paid") cur.paid += Number(p.amount);
+        else cur.open += Number(p.amount);
+        map.set(p.leerling_id, cur);
+      }
+      return map;
+    },
+  });
 }

@@ -9,6 +9,7 @@ import { useFinance, useAddExpense, useAddIncome, useDeleteExpenses, useDeleteIn
 import { useLeerlingen } from "@/data/leerlingen";
 import { useClasses } from "@/data/classes";
 import { useTuitionTiers, useFamilyLinks, resolveTuition } from "@/data/tuition";
+import { useTeacherCosts } from "@/data/people";
 
 const CAT_KIND: Record<string, BadgeKind> = { Materialen: "accent", Salaris: "primary", Faciliteit: "info", Activiteit: "success", Catering: "warn", Software: "default" };
 const CATEGORIES = ["Materialen", "Salaris", "Faciliteit", "Activiteit", "Catering", "Software", "Overig"];
@@ -66,10 +67,15 @@ export function FinanceScreen() {
   const tuitionHif = tuitionByTrack.hifdh;
   const totalTuition = tuitionReg + tuitionHif;
 
+  // Begrote docentkosten o.b.v. de planning (ingeplande lessen × uurtarief).
+  const { data: teacherCosts } = useTeacherCosts(effectiveSj);
+  const docentCost = teacherCosts?.totalCost ?? 0;
+
   const manualIncome = incomes.reduce((a, i) => a + Number(i.amount), 0);
   const totalIncome = totalTuition + manualIncome;
   const totalExpenses = expenses.reduce((a, x) => a + Number(x.amount), 0);
   const budgetTotal = budgets.reduce((a, c) => a + Number(c.planned), 0);
+  const saldo = totalIncome - totalExpenses - docentCost;
 
   const spentByBudget = useMemo(() => {
     const m: Record<string, number> = {};
@@ -104,8 +110,9 @@ export function FinanceScreen() {
           <>
             <div className="stat-grid mb-6">
               <Stat label="Begrote inkomsten" value={EUR(totalIncome)} sub={`collegegeld ${EUR(totalTuition)} + overig ${EUR(manualIncome)}`} icon="arrowUp" deltaKind="up" />
-              <Stat label="Totale uitgaven" value={EUR(totalExpenses)} sub={budgetTotal ? Math.round((totalExpenses / budgetTotal) * 100) + "% van begroting" : ""} icon="arrowDown" />
-              <Stat label="Saldo (begroot)" value={EUR(totalIncome - totalExpenses)} sub={isCurrent ? "prognose seizoen" : "definitief"} icon="coins" deltaKind={totalIncome > totalExpenses ? "up" : "down"} />
+              <Stat label="Totale uitgaven" value={EUR(totalExpenses)} sub={budgetTotal ? Math.round((totalExpenses / budgetTotal) * 100) + "% van begroting" : "excl. docentkosten"} icon="arrowDown" />
+              <Stat label="Begrote docentkosten" value={EUR(docentCost)} sub={`${teacherCosts?.rows.length ?? 0} docent(en) · ${Math.round(teacherCosts?.totalHours ?? 0)} u ingepland`} icon="users" />
+              <Stat label="Saldo (begroot)" value={EUR(saldo)} sub={isCurrent ? "prognose · incl. docentkosten" : "definitief"} icon="coins" deltaKind={saldo >= 0 ? "up" : "down"} />
               <Stat label="Ontvangen collegegeld" value={EUR(data?.paidTuition ?? 0)} sub={`${data?.openCount ?? 0} openstaand`} icon="check" />
             </div>
 
@@ -152,9 +159,45 @@ export function FinanceScreen() {
               </Card>
             </div>
 
-            {incomes.length > 0 && <IncomesTable incomes={incomes} schooljaarId={effectiveSj} schooljaarName={schooljaar?.name ?? ""} />}
+            <Card title={<><Icon name="users" size={14} /> Docentkosten o.b.v. planning</>}
+              sub="Per docent: ingeplande lessen × uurtarief (lesduur uit het tijdvak van de klas) · prognose, los van geboekte Salaris-uitgaven">
+              {!teacherCosts || teacherCosts.rows.length === 0 ? (
+                <div className="empty">Nog geen ingeplande lessen met een docent voor dit schooljaar.</div>
+              ) : (
+                <table className="table">
+                  <thead><tr>
+                    <th>Docent</th>
+                    <th style={{ textAlign: "right" }}>Uurtarief</th>
+                    <th style={{ textAlign: "right" }}>Lessen</th>
+                    <th style={{ textAlign: "right" }}>Uren</th>
+                    <th style={{ textAlign: "right" }}>Begrote kosten</th>
+                  </tr></thead>
+                  <tbody>
+                    {teacherCosts.rows.map((r) => (
+                      <tr key={r.teacher.id}>
+                        <td className="font-semibold">{r.teacher.name}{r.teacher.short ? <span className="text-subtle"> · {r.teacher.short}</span> : null}</td>
+                        <td className="num text-sm" style={{ textAlign: "right" }}>
+                          {r.teacher.uurtarief == null ? <Badge kind="warn">geen tarief</Badge> : "€" + Number(r.teacher.uurtarief).toLocaleString("nl-NL", { maximumFractionDigits: 2 }) + "/u"}
+                        </td>
+                        <td className="num text-sm" style={{ textAlign: "right" }}>{r.lessons}</td>
+                        <td className="num text-sm" style={{ textAlign: "right" }}>{r.hours.toLocaleString("nl-NL", { maximumFractionDigits: 1 })} u</td>
+                        <td className="num font-semibold" style={{ textAlign: "right" }}>{EUR(r.cost)}</td>
+                      </tr>
+                    ))}
+                    <tr style={{ background: "var(--bg-sunken)", fontWeight: 600 }}>
+                      <td colSpan={3} style={{ textAlign: "right", padding: "12px 16px" }}>Totaal</td>
+                      <td className="num" style={{ textAlign: "right", padding: "12px 16px" }}>{Math.round(teacherCosts.totalHours).toLocaleString("nl-NL")} u</td>
+                      <td className="num" style={{ textAlign: "right", padding: "12px 16px" }}>{EUR(teacherCosts.totalCost)}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              )}
+            </Card>
 
-            <ExpensesTable expenses={expenses} schooljaarId={effectiveSj} schooljaarName={schooljaar?.name ?? ""} total={totalExpenses} />
+            <div className="grid-2 mb-6" style={{ marginTop: 24 }}>
+              <IncomesTable incomes={incomes} schooljaarId={effectiveSj} schooljaarName={schooljaar?.name ?? ""} />
+              <ExpensesTable expenses={expenses} schooljaarId={effectiveSj} schooljaarName={schooljaar?.name ?? ""} total={totalExpenses} />
+            </div>
           </>
         )}
       </Section>
@@ -187,32 +230,36 @@ function IncomesTable({ incomes, schooljaarId, schooljaarName }: { incomes: Inco
     del.mutate(ids, { onSuccess: () => { toast(`${ids.length} inkomstpost(en) verwijderd`); tools.clear(); }, onError: () => toast("Verwijderen mislukt") });
   };
   return (
-    <Card title={<><Icon name="arrowUp" size={14} /> Handmatige inkomsten</>} sub={`${incomes.length} posten · schooljaar ${schooljaarName}`} className="mb-6"
-      action={<SearchBox value={tools.q} onChange={tools.setQ} placeholder="Zoek inkomst…" width={200} />}>
-      <BulkBar count={tools.selectedIds.length} noun="post(en)" onClear={tools.clear} onDelete={onDelete} pending={del.isPending} />
-      <table className="table">
-        <thead><tr>
-          <SelectTh allChecked={tools.allChecked} onToggle={tools.toggleAll} />
-          <SortTh label="Datum" k="date" sort={tools.sort} onSort={tools.toggleSort} />
-          <SortTh label="Bron" k="source" sort={tools.sort} onSort={tools.toggleSort} />
-          <SortTh label="Omschrijving" k="description" sort={tools.sort} onSort={tools.toggleSort} />
-          <SortTh label="Bedrag" k="amount" sort={tools.sort} onSort={tools.toggleSort} style={{ textAlign: "right" }} />
-        </tr></thead>
-        <tbody>
-          {tools.view.map((i) => {
-            const isChecked = tools.checked.has(i.id);
-            return (
-              <tr key={i.id} className={isChecked ? "selected" : ""}>
-                <SelectTd checked={isChecked} onToggle={(range) => tools.toggleOne(i.id, range)} label="Selecteer inkomst" />
-                <td className="font-mono text-sm">{i.date}</td>
-                <td><Badge kind="success">{i.source}</Badge></td>
-                <td>{i.description}</td>
-                <td className="num font-semibold" style={{ textAlign: "right" }}>{EUR(Number(i.amount))}</td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+    <Card title={<><Icon name="arrowUp" size={14} /> Inkomsten</>} sub={`${incomes.length} posten · schooljaar ${schooljaarName}`}
+      action={incomes.length > 0 ? <SearchBox value={tools.q} onChange={tools.setQ} placeholder="Zoek inkomst…" width={200} /> : undefined}>
+      {incomes.length === 0 ? <div className="empty">Nog geen inkomsten voor dit schooljaar.</div> : (
+        <>
+          <BulkBar count={tools.selectedIds.length} noun="post(en)" onClear={tools.clear} onDelete={onDelete} pending={del.isPending} />
+          <table className="table">
+            <thead><tr>
+              <SelectTh allChecked={tools.allChecked} onToggle={tools.toggleAll} />
+              <SortTh label="Datum" k="date" sort={tools.sort} onSort={tools.toggleSort} />
+              <SortTh label="Bron" k="source" sort={tools.sort} onSort={tools.toggleSort} />
+              <SortTh label="Omschrijving" k="description" sort={tools.sort} onSort={tools.toggleSort} />
+              <SortTh label="Bedrag" k="amount" sort={tools.sort} onSort={tools.toggleSort} style={{ textAlign: "right" }} />
+            </tr></thead>
+            <tbody>
+              {tools.view.map((i) => {
+                const isChecked = tools.checked.has(i.id);
+                return (
+                  <tr key={i.id} className={isChecked ? "selected" : ""}>
+                    <SelectTd checked={isChecked} onToggle={(range) => tools.toggleOne(i.id, range)} label="Selecteer inkomst" />
+                    <td className="font-mono text-sm">{i.date}</td>
+                    <td><Badge kind="success">{i.source}</Badge></td>
+                    <td>{i.description}</td>
+                    <td className="num font-semibold" style={{ textAlign: "right" }}>{EUR(Number(i.amount))}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </>
+      )}
     </Card>
   );
 }
