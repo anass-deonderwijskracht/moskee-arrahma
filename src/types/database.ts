@@ -76,6 +76,7 @@ export interface Database {
           id: string; teacher_id: string; schooljaar_id: string; period: string;
           lessons: number; hours: number; rate: number | null; amount: number;
           paid_at: string; note: string | null;
+          paid_by: string | null; paid_by_name: string | null;
         } & Timestamps;
         Insert: { teacher_id: string; schooljaar_id: string; period: string } & Partial<
           Database["public"]["Tables"]["teacher_payouts"]["Row"]

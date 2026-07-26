@@ -166,6 +166,7 @@ function PayoutHistoryCard({ teacherId, rate }: { teacherId: string; rate: numbe
                 <th style={{ textAlign: "right" }}>Uren</th>
                 <th style={{ textAlign: "right" }}>Bedrag</th>
                 <th>Status</th>
+                <th>Afgevinkt door</th>
               </tr></thead>
               <tbody>
                 {rows.map((r) => {
@@ -182,6 +183,7 @@ function PayoutHistoryCard({ teacherId, rate }: { teacherId: string; rate: numbe
                           ? <Badge kind="success" dot>Uitbetaald · {ddmmyyyy(paid.paid_at)}</Badge>
                           : <Badge kind="warn" dot>Openstaand</Badge>}
                       </td>
+                      <td className="text-sm">{paid ? (paid.paid_by_name ?? <span className="text-subtle">Onbekend</span>) : <span className="text-subtle">—</span>}</td>
                     </tr>
                   );
                 })}

@@ -149,7 +149,7 @@ export function TeacherPayouts() {
                   <th style={{ textAlign: "right" }}>Uren</th>
                   <th style={{ textAlign: "right" }}>Uurtarief</th>
                   <th style={{ textAlign: "right" }}>Bedrag</th>
-                  <th style={{ width: 170 }}>Uitbetaald</th>
+                  <th style={{ width: 200 }}>Uitbetaald</th>
                 </tr></thead>
                 <tbody>
                   {m.rows.map((r) => {
@@ -179,11 +179,16 @@ export function TeacherPayouts() {
                         <td className="num text-sm" style={{ textAlign: "right" }}>{rateOf(rate)}</td>
                         <td className="num font-semibold" style={{ textAlign: "right" }}>{money(paid ? Number(r.payout!.amount) : r.amount)}</td>
                         <td>
-                          <label className="flex items-center gap-2" style={{ cursor: "pointer" }}>
-                            <input type="checkbox" checked={paid} disabled={setPayout.isPending} onChange={() => toggleRow(m, r)} />
-                            {paid
-                              ? <span className="text-xs" style={{ color: "var(--success)", fontWeight: 600 }}>Betaald · {dayMonth(r.payout!.paid_at)}</span>
-                              : <span className="text-xs text-subtle">Openstaand</span>}
+                          <label className="flex items-start gap-2" style={{ cursor: "pointer" }}>
+                            <input type="checkbox" checked={paid} disabled={setPayout.isPending} onChange={() => toggleRow(m, r)} style={{ marginTop: 3 }} />
+                            {paid ? (
+                              <span style={{ minWidth: 0 }}>
+                                <span className="text-xs" style={{ color: "var(--success)", fontWeight: 600, display: "block" }}>
+                                  Betaald · {dayMonth(r.payout!.paid_at)}
+                                </span>
+                                <span className="text-xs text-subtle">door {r.payout!.paid_by_name ?? "onbekend"}</span>
+                              </span>
+                            ) : <span className="text-xs text-subtle">Openstaand</span>}
                           </label>
                         </td>
                       </tr>

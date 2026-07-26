@@ -16,7 +16,7 @@ const payout = (teacherId: string, period: string, over: Partial<TeacherPayout> 
   ({
     id: "p-" + teacherId + "-" + period, teacher_id: teacherId, schooljaar_id: "sj", period,
     lessons: 2, hours: 4, rate: 30, amount: 120, paid_at: "2026-09-30T12:00:00Z", note: null,
-    created_at: "2026-09-30T12:00:00Z", ...over,
+    paid_by: "u1", paid_by_name: "Beheerder", created_at: "2026-09-30T12:00:00Z", ...over,
   });
 
 const A = teacher("a", "Aisha", 30);

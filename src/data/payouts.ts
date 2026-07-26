@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import type { Tables } from "@/types/database";
 import { lessonHours, type Teacher } from "@/data/people";
+import { useSession } from "@/features/auth/AuthProvider";
 
 export type TeacherPayout = Tables<"teacher_payouts">;
 
@@ -192,6 +193,8 @@ export interface SetPayoutInput {
 /** Vinkt een maand af (snapshot vastleggen) of weer uit (rij verwijderen). */
 export function useSetTeacherPayout() {
   const qc = useQueryClient();
+  // Wie vinkt af — id voor de koppeling, naam als snapshot voor de historie.
+  const { session, fullName } = useSession();
   return useMutation({
     mutationFn: async (input: SetPayoutInput | SetPayoutInput[]) => {
       const list = Array.isArray(input) ? input : [input];
@@ -210,6 +213,7 @@ export function useSetTeacherPayout() {
           toAdd.map((i) => ({
             teacher_id: i.teacher_id, schooljaar_id: i.schooljaar_id, period: periodOf(i.month),
             lessons: i.lessons, hours: i.hours, rate: i.rate, amount: i.amount, paid_at: now,
+            paid_by: session?.user.id ?? null, paid_by_name: fullName,
           })) as never,
           { onConflict: "teacher_id,schooljaar_id,period" },
         );
