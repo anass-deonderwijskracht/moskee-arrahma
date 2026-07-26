@@ -12,12 +12,12 @@
 // Identiteit is het telefoonnummer, genormaliseerd naar E.164. Dat is het enige
 // veld dat betrouwbaar matcht met de handmatige import van vorig jaar. Namen
 // worden nooit als geheel overschreven: we strippen alleen ons eigen
-// achtervoegsel en plakken het nieuwe erachter (zie _shared/contactName.ts).
+// achtervoegsel en plakken het nieuwe erachter (zie contactName.ts naast deze function).
 //
 // Auth: admin-JWT (vanuit de app) óf de service-role key als bearer (machine,
 // bijv. vanuit fillout-intake).
 //
-// Body: { dryRun?: boolean (default true), code?: string (default "AO") }
+// Body: { dryRun?: boolean (default true) } — de AO/HF-code volgt uit het traject.
 //
 // Secrets: GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REFRESH_TOKEN
 //
@@ -28,7 +28,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
   applyToNameParts, joinNameParts, normalizePhone, bestMarker, bestCode, yearSuffix,
   type Marker, type NameParts,
-} from "../_shared/contactName.ts";
+} from "./contactName.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",

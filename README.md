@@ -125,8 +125,8 @@ vervangen — handmatige correcties in Google blijven staan. Matchen gebeurt op
 telefoonnummer, genormaliseerd naar E.164, omdat dat het enige veld is dat
 betrouwbaar overeenkomt met de handmatige import.
 
-De naamlogica staat los in [`_shared/contactName.ts`](supabase/functions/_shared/contactName.ts)
-en is gedekt door 28 tests — dit is het stuk dat bij een fout honderden
+De naamlogica staat los in [`contactName.ts`](supabase/functions/google-contacts-sync/contactName.ts)
+en is gedekt door 31 tests — dit is het stuk dat bij een fout honderden
 contacten tegelijk zou verminken.
 
 **Draaien**: Instellingen → Google Contacts. Eerst *Controleren* (dry-run,

@@ -11,8 +11,10 @@
 // strippen we een bestaand achtervoegsel en plakken het nieuwe erachter, zodat
 // handmatige naamcorrecties in Google blijven staan.
 //
-// Geen Deno-specifieke code hier: de edge function importeert dit bestand en
-// vitest test het rechtstreeks.
+// Geen Deno-specifieke code hier: index.ts importeert dit bestand en vitest test
+// het rechtstreeks. Het staat bewust ín de function-map en niet in een gedeelde
+// _shared-map: bij deployen wordt alleen de map van de function zelf gebundeld,
+// dus een import van buiten die map faalt met "Module not found".
 // ============================================================================
 
 /** Statussen uit de inschrijvingspijplijn. */
