@@ -119,11 +119,11 @@ export interface Database {
         Row: {
           id: string; first_name: string; last_name: string; full_name: string;
           initials: string | null; gender: string | null; birth_year: number | null;
-          address: string | null; notes: string | null;
+          birthdate: string | null; address: string | null; notes: string | null;
         } & Timestamps;
         Insert: { first_name: string; last_name: string } & Partial<{
           initials: string | null; gender: string | null; birth_year: number | null;
-          address: string | null; notes: string | null;
+          birthdate: string | null; address: string | null; notes: string | null;
         }>;
         Update: Partial<Database["public"]["Tables"]["kinderen"]["Row"]>;
         Relationships: [];
@@ -216,7 +216,7 @@ export interface Database {
           id: string; child_name: string; age: number | null; gender: string | null; track: string;
           status: string; target_class: string | null; submitted_at: string | null;
           submitted_label: string | null; rejection_reason: string | null; preferred_lesday: string | null;
-          address: string | null; notes: string | null; birthdate: string | null;
+          address: string | null; notes: string | null; birthdate: string | null; twijfel: boolean;
         } & Timestamps;
         Insert: { child_name: string } & Partial<Database["public"]["Tables"]["enrollments"]["Row"]>;
         Update: Partial<Database["public"]["Tables"]["enrollments"]["Row"]>;

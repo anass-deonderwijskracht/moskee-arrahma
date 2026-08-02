@@ -18,7 +18,7 @@ import { ToetsenTab } from "@/features/class-admin/ToetsenTab";
 import { BeoordelingenTab } from "@/features/class-admin/BeoordelingenTab";
 
 type Tab = "overview" | "attendance" | "quranadmin" | "lessons" | "students" | "quran" | "toetsen" | "beoordelingen";
-const currentYear = new Date().getFullYear();
+import { ageLabel } from "@/data/age";
 
 export function ClassDetail() {
   const { id } = useParams();
@@ -251,11 +251,11 @@ function ClassStudents({ leerlingen }: { leerlingen: ClassLeerling[] }) {
         <tbody>
           {leerlingen.map((l) => {
             const mm = m[l.id];
-            const age = l.kinderen?.birth_year ? currentYear - l.kinderen.birth_year : null;
+
             return (
               <tr key={l.id} onClick={() => navigate("/students/" + l.id)}>
                 <td><div className="flex items-center gap-3"><Avatar name={l.kinderen?.full_name} initials={l.kinderen?.initials ?? undefined} size="sm" /><span className="font-semibold">{l.kinderen?.full_name}</span></div></td>
-                <td className="num">{age ?? "—"} jr</td>
+                <td className="num">{ageLabel(l.kinderen ?? {}, { approx: true })}</td>
                 <td style={{ width: 140 }}><div className="flex items-center gap-2"><div style={{ flex: 1 }}><QBar value={(mm?.attendance_pct ?? 0) * 100} /></div><span className="num text-xs">{pct(mm?.attendance_pct)}</span></div></td>
                 <td className="num">{pct(mm?.quran_learned_pct)}</td>
                 <td className="num">{mm?.surahs_known ?? 0}/38</td>

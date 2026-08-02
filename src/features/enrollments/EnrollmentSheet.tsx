@@ -4,10 +4,11 @@ import { useToast } from "@/components/chrome/Toast";
 import {
   useUpdateEnrollmentStatus, useUpdateEnrollment, useUpdateEnrollmentParent,
   useDeleteEnrollments, useUpsertPlacement, usePlacementPayment, useSetPlacementPayment,
-  ENROLL_STATUSES, type Enrollment, type Placement,
+  useFinalizeEnrollment, finalizeBlockers, ENROLL_STATUSES, type Enrollment, type Placement,
 } from "@/data/enrollments";
 import type { Tables } from "@/types/database";
 import { useTuitionTiers, useResolvedTuition, useSetLesgeldOverride } from "@/data/tuition";
+import { ageLabel } from "@/data/age";
 import { ENROLL_COLUMNS } from "@/data/dashboard";
 
 const STATUS_TITLE: Record<string, string> = Object.fromEntries(ENROLL_COLUMNS.map((c) => [c.id, c.title]));
@@ -25,6 +26,7 @@ export function EnrollmentSheet({ item, onClose, schooljaarId, placement }: {
   const updateParent = useUpdateEnrollmentParent();
   const del = useDeleteEnrollments();
   const upsert = useUpsertPlacement();
+  const finalize = useFinalizeEnrollment();
   const { data: tiers } = useTuitionTiers(schooljaarId ?? null);
 
   useEffect(() => {
@@ -120,6 +122,19 @@ export function EnrollmentSheet({ item, onClose, schooljaarId, placement }: {
   const settable = ENROLL_STATUSES.filter((s) => s !== "definitief");
   const setStatus = (s: string) => updateStatus.mutate({ id: item.id, status: s }, { onSuccess: () => toast(`${item.child_name} → ${STATUS_TITLE[s] ?? s}`) });
 
+  // Definitief inschrijven kan pas met klas én niveau op de plaatsing.
+  const blockers = finalizeBlockers(placement);
+  const onFinalize = async () => {
+    if (!placement?.id) return;
+    try {
+      const leerlingId = await finalize.mutateAsync(placement.id);
+      if (placement.lesgeld_verschuldigd != null && leerlingId) {
+        await setOverride.mutateAsync({ leerlingId, value: Number(placement.lesgeld_verschuldigd) });
+      }
+      toast(`${item.child_name} definitief ingeschreven`);
+    } catch (err) { toast("Inschrijven mislukt: " + (err instanceof Error ? err.message : "onbekend")); }
+  };
+
   return (
     <div className="sheet-overlay" onClick={onClose}>
       <div className="sheet" onClick={(e) => e.stopPropagation()}>
@@ -138,8 +153,23 @@ export function EnrollmentSheet({ item, onClose, schooljaarId, placement }: {
 
           {/* ---- Gegevens (inline bewerkbaar) ---- */}
           <div className="grid-2" style={{ gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 20 }}>
-            <div><label style={lbl}>Leeftijd</label><input className="input" type="number" defaultValue={item.age ?? ""} onBlur={(e) => { const v = e.target.value.trim(); const n = v === "" ? null : parseInt(v) || null; if (n !== item.age) save({ age: n }); }} /></div>
-            <div><label style={lbl}>Geboortedatum</label><input className="input" type="date" defaultValue={item.birthdate ?? ""} onBlur={(e) => saveText("birthdate", e.target.value)} /></div>
+            <div>
+              <label style={lbl}>Geboortedatum</label>
+              <input className="input" type="date" defaultValue={item.birthdate ?? ""} onBlur={(e) => saveText("birthdate", e.target.value)} />
+            </div>
+            <div>
+              {/* Met een geboortedatum is de leeftijd afgeleid en dus altijd
+                  actueel; een los getypt getal verouderde elk jaar. */}
+              <label style={lbl}>Leeftijd {item.birthdate ? "(uit geboortedatum)" : "(schatting)"}</label>
+              {item.birthdate ? (
+                <div className="input" style={{ display: "flex", alignItems: "center", background: "var(--bg-sunken)", color: "var(--fg-muted)" }}>
+                  {ageLabel(item)}
+                </div>
+              ) : (
+                <input className="input" type="number" min={0} max={30} defaultValue={item.age ?? ""} placeholder="bv. 8"
+                  onBlur={(e) => { const v = e.target.value.trim(); const n = v === "" ? null : parseInt(v) || null; if (n !== item.age) save({ age: n }); }} />
+              )}
+            </div>
             <div><label style={lbl}>Geslacht</label><Select defaultValue={item.gender ?? ""} onChange={(e) => save({ gender: e.target.value || null })}><option value="">—</option><option value="m">Jongen</option><option value="f">Meisje</option></Select></div>
             <div><label style={lbl}>Traject</label><Select defaultValue={item.track ?? "regulier"} onChange={(e) => save({ track: e.target.value })}><option value="regulier">Regulier</option><option value="hifdh">Hifdh</option></Select></div>
             <div><label style={lbl}>Voorkeur lesdag</label><input className="input" defaultValue={item.preferred_lesday ?? ""} onBlur={(e) => saveText("preferred_lesday", e.target.value)} /></div>
@@ -225,7 +255,30 @@ export function EnrollmentSheet({ item, onClose, schooljaarId, placement }: {
                 </Btn>
               ))}
             </div>
-            {!schooljaarId && <div className="text-xs text-subtle mt-3">Definitief inschrijven gaat via de <b>Klassenindeler</b> (klas + niveau vereist).</div>}
+            {/* Definitief maken is meer dan een status: er wordt een kind, ouders
+                en een leerling van gemaakt. Daarom een eigen knop met een
+                zichtbare reden als het nog niet kan — niet stilzwijgend weglaten. */}
+            <div style={{ marginTop: 12 }}>
+              {finalised ? (
+                <div className="flex items-center gap-2 text-xs text-subtle">
+                  <Badge kind="success" dot>Definitief ingeschreven</Badge>
+                </div>
+              ) : !schooljaarId ? (
+                <div className="text-xs text-subtle">Definitief inschrijven gaat via de <b>Klassenindeler</b> (klas + niveau vereist).</div>
+              ) : (
+                <>
+                  <Btn kind="primary" icon="check" disabled={blockers.length > 0 || finalize.isPending}
+                    onClick={onFinalize}>
+                    {finalize.isPending ? "Bezig…" : "Definitief inschrijven"}
+                  </Btn>
+                  {blockers.length > 0 && (
+                    <div className="text-xs mt-2" style={{ color: "var(--warn)" }}>
+                      Kies eerst {blockers.join(" en ")} in de <b>Klassenindeler</b>. Daarna kan de inschrijving definitief worden.
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
           </div>
 
           {/* ---- Verwijderen ---- */}

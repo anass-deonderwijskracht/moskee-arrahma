@@ -2,8 +2,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { Section, Card, Badge, Btn, Icon, Avatar, QBar, pct, type BadgeKind } from "@/components/ui";
 import { Loading, ErrorState } from "@/features/_shared/states";
 import { useKindDetail, type KindYear } from "@/data/relations";
-
-const currentYear = new Date().getFullYear();
+import { ageLabel } from "@/data/age";
 
 function attendanceOf(y: KindYear, metrics: Record<string, { attendance_pct: number | null }>): number | null {
   if (y.schooljaren?.is_current) return metrics[y.id]?.attendance_pct ?? null;
@@ -19,7 +18,7 @@ export function KindDetail() {
   if (isLoading || !data) return <Loading label="Kind laden…" />;
 
   const { kind: k, years, metrics, ouders, siblings } = data;
-  const age = k.birth_year ? currentYear - k.birth_year : null;
+
   const current = years.find((y) => y.schooljaren?.is_current) ?? years[0];
   const currentMetrics = current ? metrics[current.id] : undefined;
 
@@ -42,7 +41,7 @@ export function KindDetail() {
         <div style={{ flex: 1, minWidth: 0 }}>
           <div className="flex items-center gap-3 mb-2" style={{ flexWrap: "wrap" }}>
             {current?.classes && <Badge kind={(current.classes.color as BadgeKind) ?? "primary"}>{current.classes.code} (huidig)</Badge>}
-            <Badge>{age != null ? age + " jaar" : ""} · {k.gender === "f" ? "♀" : "♂"}</Badge>
+            <Badge>{ageLabel(k, { approx: true, unit: "jaar" })} · {k.gender === "f" ? "♀" : "♂"}</Badge>
           </div>
           <div className="grid-auto" style={{ marginTop: 16 }}>
             <div><div className="text-xs text-subtle">Aanwezigheid (gemiddeld)</div><div style={{ fontSize: 22, fontWeight: 600 }}>{pct(avgAtt)}</div></div>

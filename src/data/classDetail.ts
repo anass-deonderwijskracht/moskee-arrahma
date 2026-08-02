@@ -39,7 +39,7 @@ export function useClass(id: string | undefined) {
 }
 
 export type ClassLeerling = Tables<"leerlingen"> & {
-  kinderen: { id: string; full_name: string; initials: string | null; gender: string | null; birth_year: number | null } | null;
+  kinderen: { id: string; full_name: string; initials: string | null; gender: string | null; birth_year: number | null; birthdate: string | null } | null;
 };
 
 export function useClassLeerlingen(classId: string | undefined) {
@@ -49,7 +49,7 @@ export function useClassLeerlingen(classId: string | undefined) {
     queryFn: async (): Promise<ClassLeerling[]> => {
       const { data, error } = await supabase
         .from("leerlingen")
-        .select("*, kinderen(id, full_name, initials, gender, birth_year)")
+        .select("*, kinderen(id, full_name, initials, gender, birth_year, birthdate)")
         .eq("class_id", classId!);
       if (error) throw error;
       const rows = (data as unknown as ClassLeerling[]) ?? [];

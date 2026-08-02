@@ -5,6 +5,7 @@ import { useToast } from "@/components/chrome/Toast";
 import { useCreateEnrollment } from "@/data/enrollments";
 import { useClasses } from "@/data/classes";
 import { useCurrentSchooljaar } from "@/data/schooljaren";
+import { ageFromBirthdate, ageLabel } from "@/data/age";
 
 const LESDAGEN = ["Zaterdag", "Zondag", "Geen voorkeur"];
 
@@ -18,6 +19,9 @@ export function NewEnrollmentModal({ track, onClose }: { track: "regulier" | "hi
   const eligibleClasses = (classes ?? []).filter((c) => (track === "hifdh" ? c.track === "hifdh" : c.track !== "hifdh"));
 
   const [childName, setChildName] = useState("");
+  // Geboortedatum is de bron; de leeftijd wordt eruit afgeleid en veroudert dus
+  // niet. Zonder datum blijft een los getal mogelijk.
+  const [birthdate, setBirthdate] = useState("");
   const [age, setAge] = useState("");
   const [gender, setGender] = useState("");
   const [lesday, setLesday] = useState("Geen voorkeur");
@@ -36,7 +40,8 @@ export function NewEnrollmentModal({ track, onClose }: { track: "regulier" | "hi
     try {
       await create.mutateAsync({
         child_name: childName.trim(),
-        age: age ? parseInt(age) : null,
+        birthdate: birthdate || null,
+        age: birthdate ? ageFromBirthdate(birthdate) : age ? parseInt(age) : null,
         gender: gender || null,
         track,
         target_class: targetClass || null,
@@ -60,7 +65,14 @@ export function NewEnrollmentModal({ track, onClose }: { track: "regulier" | "hi
     >
       <div className="grid-3" style={{ gridTemplateColumns: "2fr 1fr 1fr" }}>
         <Field label="Naam kind"><input className="input" value={childName} onChange={(e) => setChildName(e.target.value)} placeholder="Voor- en achternaam" /></Field>
-        <Field label="Leeftijd"><input className="input" type="number" min={4} max={18} value={age} onChange={(e) => setAge(e.target.value)} placeholder="bv. 8" /></Field>
+        <Field label="Geboortedatum"><input className="input" type="date" value={birthdate} onChange={(e) => setBirthdate(e.target.value)} /></Field>
+        <Field label={birthdate ? "Leeftijd" : "Leeftijd (schatting)"}>
+          {birthdate
+            ? <div className="input" style={{ display: "flex", alignItems: "center", background: "var(--bg-sunken)", color: "var(--fg-muted)" }}>{ageLabel({ birthdate })}</div>
+            : <input className="input" type="number" min={4} max={18} value={age} onChange={(e) => setAge(e.target.value)} placeholder="bv. 8" />}
+        </Field>
+      </div>
+      <div className="grid-3" style={{ gridTemplateColumns: "1fr 1fr" }}>
         <Field label="Geslacht">
           <Select value={gender} onChange={(e) => setGender(e.target.value)}>
             <option value="">—</option><option value="m">Jongen</option><option value="f">Meisje</option>

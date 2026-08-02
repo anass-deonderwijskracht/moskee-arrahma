@@ -40,7 +40,7 @@ export function useDeleteLeerlingen() {
 }
 
 export type LeerlingRow = Tables<"leerlingen"> & {
-  kinderen: { id: string; full_name: string; initials: string | null; gender: string | null; birth_year: number | null } | null;
+  kinderen: { id: string; full_name: string; initials: string | null; gender: string | null; birth_year: number | null; birthdate: string | null } | null;
   classes: { id: string; code: string; color: string | null } | null;
 };
 export type LeerlingMetrics = Views<"leerling_metrics">;
@@ -54,7 +54,7 @@ export function useLeerlingen(schooljaarId: string | null | undefined) {
       let q = supabase
         .from("leerlingen")
         .select(
-          "*, kinderen(id, full_name, initials, gender, birth_year), classes(id, code, color)",
+          "*, kinderen(id, full_name, initials, gender, birth_year, birthdate), classes(id, code, color)",
         );
       if (schooljaarId) q = q.eq("schooljaar_id", schooljaarId);
       const { data, error } = await q;

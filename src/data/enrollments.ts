@@ -44,6 +44,25 @@ export function useUpdateEnrollmentStatus() {
   });
 }
 
+/** Twijfel aan- of uitzetten. Staat los van de status en werkt optimistisch. */
+export function useToggleTwijfel() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, twijfel }: { id: string; twijfel: boolean }) => {
+      const { error } = await supabase.from("enrollments").update({ twijfel } as never).eq("id", id);
+      if (error) throw error;
+    },
+    onMutate: async ({ id, twijfel }) => {
+      await qc.cancelQueries({ queryKey: ["enrollments-full"] });
+      const prev = qc.getQueryData<Enrollment[]>(["enrollments-full"]);
+      qc.setQueryData<Enrollment[]>(["enrollments-full"], (old) => old?.map((e) => (e.id === id ? { ...e, twijfel } : e)));
+      return { prev };
+    },
+    onError: (_e, _v, ctx) => { if (ctx?.prev) qc.setQueryData(["enrollments-full"], ctx.prev); },
+    onSettled: () => qc.invalidateQueries({ queryKey: ["enrollments-full"] }),
+  });
+}
+
 export function useUpdateEnrollment() {
   const qc = useQueryClient();
   return useMutation({
@@ -94,7 +113,7 @@ export function useDeleteEnrollments() {
 }
 
 export interface NewEnrollmentInput {
-  child_name: string; age: number | null; gender: string | null; track: string;
+  child_name: string; birthdate: string | null; age: number | null; gender: string | null; track: string;
   target_class: string | null; preferred_lesday: string | null;
   parents: { role: string; name: string; phone: string; email: string; is_primary: boolean }[];
 }
@@ -106,7 +125,7 @@ export function useCreateEnrollment() {
       const { data, error } = await supabase
         .from("enrollments")
         .insert({
-          child_name: input.child_name, age: input.age, gender: input.gender, track: input.track,
+          child_name: input.child_name, birthdate: input.birthdate, age: input.age, gender: input.gender, track: input.track,
           status: "wachtlijst", target_class: input.target_class, preferred_lesday: input.preferred_lesday,
           submitted_label: "zojuist",
         } as never)
@@ -248,6 +267,14 @@ export function useSetPlacementPayment() {
       qc.invalidateQueries({ queryKey: ["dashboard"] });
     },
   });
+}
+
+/** Wat er nog ontbreekt voordat een plaatsing definitief kan worden; leeg = klaar. */
+export function finalizeBlockers(placement: Placement | null | undefined): string[] {
+  const missing: string[] = [];
+  if (!placement?.class_id) missing.push("klas");
+  if (!placement?.niveau) missing.push("niveau");
+  return missing;
 }
 
 export function useFinalizeEnrollment() {

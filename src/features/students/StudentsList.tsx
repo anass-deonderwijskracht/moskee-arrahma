@@ -13,7 +13,7 @@ import { useSetLesgeldOverride, useResolvedTuition, usePaymentsByLeerling } from
 
 const NIVEAUS = ["0 (beginner)", "0,5", "1", "1,5", "2"];
 
-const currentYear = new Date().getFullYear();
+import { ageLabel } from "@/data/age";
 
 export function StudentsList() {
   const navigate = useNavigate();
@@ -153,7 +153,7 @@ export function StudentsList() {
             <tbody>
               {rows.map((l) => {
                 const mm = m[l.id];
-                const age = l.kinderen?.birth_year ? currentYear - l.kinderen.birth_year : null;
+
                 const isChecked = tools.checked.has(l.id);
                 return (
                   <tr key={l.id} onClick={() => navigate("/students/" + l.id)} className={isChecked ? "selected" : ""}>
@@ -163,7 +163,7 @@ export function StudentsList() {
                         <Avatar name={l.kinderen?.full_name} initials={l.kinderen?.initials ?? undefined} size="sm" />
                         <div>
                           <div className="font-semibold">{l.kinderen?.full_name}</div>
-                          <div className="text-xs text-subtle">{age != null ? age + " jr" : ""}</div>
+                          <div className="text-xs text-subtle">{l.kinderen ? ageLabel(l.kinderen, { approx: true }) : ""}</div>
                         </div>
                       </div>
                     </td>

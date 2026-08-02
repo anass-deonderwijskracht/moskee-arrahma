@@ -7,6 +7,7 @@ import { CardMove, EmptyCol } from "@/features/_shared/kanban";
 import { useEnrollments, useUpdateEnrollmentStatus, useDeleteEnrollments, usePlacements, type Enrollment } from "@/data/enrollments";
 import { useSchooljaren } from "@/data/schooljaren";
 import { ENROLL_COLUMNS } from "@/data/dashboard";
+import { age, ageLabel } from "@/data/age";
 import { Klassenindeler } from "@/features/klassenindeler/Klassenindeler";
 import { NewEnrollmentModal } from "./NewEnrollmentModal";
 import { EnrollmentSheet } from "./EnrollmentSheet";
@@ -56,7 +57,7 @@ export function EnrollmentsScreen() {
     sorters: {
       child_name: (it) => it.child_name,
       track: (it) => it.track,
-      age: (it) => it.age,
+      age: (it) => age(it) ?? -1,
       preferred_lesday: (it) => it.preferred_lesday,
       target_class: (it) => it.target_class,
       status: (it) => it.status,
@@ -81,6 +82,13 @@ export function EnrollmentsScreen() {
   const moveTo = (id: string, col: string) => {
     const item = items.find((i) => i.id === id);
     if (!item || item.status === col) return;
+    // Definitief is geen gewone status: er wordt een kind, ouders en een leerling
+    // van gemaakt. Alleen de status omzetten liet die records ontbreken.
+    if (col === "definitief") {
+      toast("Definitief inschrijven gaat via de Klassenindeler — daar kies je klas en niveau.");
+      setView("indeler");
+      return;
+    }
     updateStatus.mutate({ id, status: col });
     toast(`${item.child_name} verplaatst naar “${STATUS_TITLE[col]}”`);
   };
@@ -149,7 +157,7 @@ export function EnrollmentsScreen() {
                           onDragStart={() => setDragId(item.id)} onDragEnd={() => setDragId(null)} onClick={() => setSelected(item)}>
                           <div className="row" style={{ justifyContent: "space-between" }}>
                             <span className="name">{item.child_name}</span>
-                            <span className="text-xs text-subtle">{item.age} jr</span>
+                            <span className="text-xs text-subtle">{ageLabel(item, { approx: true })}</span>
                           </div>
                           <div className="row"><Badge kind={item.track === "hifdh" ? "primary" : "info"} dot>{item.track === "hifdh" ? "Hifdh-traject" : "Regulier"}</Badge></div>
                           <div className="meta"><span><b>Klas:</b> {item.target_class ?? "—"}</span>{item.preferred_lesday && <span><b>Voorkeur:</b> {item.preferred_lesday}</span>}</div>
@@ -200,7 +208,7 @@ export function EnrollmentsScreen() {
                         <SelectTd checked={isChecked} onToggle={(range) => t.toggleOne(it.id, range)} label={`Selecteer ${it.child_name}`} />
                         <td><div className="flex items-center gap-3"><Avatar name={it.child_name} size="sm" /><span className="font-semibold">{it.child_name}</span></div></td>
                         <td><Badge kind={it.track === "hifdh" ? "primary" : "info"} dot>{it.track === "hifdh" ? "Hifdh" : "Regulier"}</Badge></td>
-                        <td className="num">{it.age} jr</td>
+                        <td className="num">{ageLabel(it, { approx: true })}</td>
                         <td className="text-sm">{it.preferred_lesday ? <Badge kind="info">{it.preferred_lesday}</Badge> : <span className="text-subtle">—</span>}</td>
                         <td className="text-sm">{p[0]?.name}<div className="text-xs text-subtle font-mono">{p[0]?.phone}</div></td>
                         <td className="text-sm">{p[1]?.name}<div className="text-xs text-subtle font-mono">{p[1]?.phone}</div></td>

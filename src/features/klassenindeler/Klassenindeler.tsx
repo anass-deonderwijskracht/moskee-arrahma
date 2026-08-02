@@ -4,9 +4,10 @@ import { Loading } from "@/features/_shared/states";
 import { useToast } from "@/components/chrome/Toast";
 import { useSchooljaren } from "@/data/schooljaren";
 import { useClasses } from "@/data/classes";
-import { usePlacements, useUpsertPlacement, useFinalizeEnrollment, useUpdateFinalizedLeerling, useUpdateEnrollmentStatus, NIVEAUS, type Enrollment, type Placement } from "@/data/enrollments";
+import { usePlacements, useUpsertPlacement, useFinalizeEnrollment, useUpdateFinalizedLeerling, useUpdateEnrollmentStatus, useToggleTwijfel, finalizeBlockers, NIVEAUS, type Enrollment, type Placement } from "@/data/enrollments";
 import { useSetLesgeldOverride } from "@/data/tuition";
 import { ENROLL_COLUMNS } from "@/data/dashboard";
+import { age, ageLabel } from "@/data/age";
 import { EnrollmentSheet } from "@/features/enrollments/EnrollmentSheet";
 
 type Track = "all" | "regulier" | "hifdh";
@@ -38,6 +39,9 @@ export function Klassenindeler({ enrollments }: { enrollments: Enrollment[] }) {
 
   const [track, setTrack] = useState<Track>("regulier");
   const [statuses, setStatuses] = useState<Set<string>>(() => new Set(ENROLL_COLUMNS.map((c) => c.id)));
+  const [onlyTwijfel, setOnlyTwijfel] = useState(false);
+  // Klikken op een klas-tegel filtert de lijst eronder; nog een klik zet 'm uit.
+  const [classFilter, setClassFilter] = useState<string | null>(null);
   const [selected, setSelected] = useState<Enrollment | null>(null);
   const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" }>({ key: "date", dir: "asc" });
 
@@ -47,6 +51,7 @@ export function Klassenindeler({ enrollments }: { enrollments: Enrollment[] }) {
   const finalize = useFinalizeEnrollment();
   const updateLeerling = useUpdateFinalizedLeerling();
   const updateStatus = useUpdateEnrollmentStatus();
+  const toggleTwijfel = useToggleTwijfel();
   const setOverride = useSetLesgeldOverride();
 
   // Onthoudt per inschrijving de status van vóór de klik, zodat een tweede klik
@@ -76,14 +81,18 @@ export function Klassenindeler({ enrollments }: { enrollments: Enrollment[] }) {
   // Table shows ALL statuses by default; filtered by track + the status multi-select,
   // then sorted client-side with a stable `id` tiebreaker so rows never jump on edits.
   const indelen = useMemo(() => {
-    const rows = enrollments.filter((e) => (track === "all" || e.track === track) && statuses.has(e.status));
+    const rows = enrollments.filter((e) =>
+      (track === "all" || e.track === track)
+      && statuses.has(e.status)
+      && (!onlyTwijfel || e.twijfel)
+      && (!classFilter || pmap[e.id]?.class_id === classFilter));
     const val = (e: Enrollment): string | number => {
       const p = pmap[e.id];
       switch (sort.key) {
         case "name": return (e.child_name ?? "").toLowerCase();
         case "status": return STATUS_ORDER[e.status] ?? 99;
         case "lesday": return e.preferred_lesday ?? "";
-        case "age": return e.age ?? -1;
+        case "age": return age(e) ?? -1;
         case "klas": return p?.class_id ? (classCode[p.class_id] ?? "") : "";
         case "niveau": return p?.niveau ?? "";
         case "lesgeld": return p?.lesgeld_bedrag != null ? Number(p.lesgeld_bedrag) : -1;
@@ -96,7 +105,13 @@ export function Klassenindeler({ enrollments }: { enrollments: Enrollment[] }) {
       const cmp = typeof va === "number" && typeof vb === "number" ? va - vb : String(va).localeCompare(String(vb));
       return (cmp !== 0 ? cmp : a.id.localeCompare(b.id)) * dir;
     });
-  }, [enrollments, track, statuses, sort, pmap, classCode]);
+  }, [enrollments, track, statuses, onlyTwijfel, classFilter, sort, pmap, classCode]);
+
+  // Telt binnen het gekozen traject, zodat het getal bij de chip klopt met de lijst.
+  const twijfelCount = useMemo(
+    () => enrollments.filter((e) => (track === "all" || e.track === track) && e.twijfel).length,
+    [enrollments, track],
+  );
 
   const toggleSort = (key: SortKey) => setSort((s) => (s.key === key ? { key, dir: s.dir === "asc" ? "desc" : "asc" } : { key, dir: "asc" }));
 
@@ -180,9 +195,24 @@ export function Klassenindeler({ enrollments }: { enrollments: Enrollment[] }) {
               const cap = c.capacity ?? 1;
               const ratio = cnt.concept / cap;
               const fill = ratio >= 1 ? "var(--danger)" : ratio > 0.8 ? "var(--warn)" : "var(--primary)";
+              const active = classFilter === c.id;
               return (
-                <div key={c.id} style={{ padding: 12, background: "var(--bg-sunken)", borderRadius: 10, border: "1px solid " + (cnt.concept > cap ? "var(--danger)" : "var(--border)") }}>
-                  <div className="flex items-center justify-between mb-2"><span className="font-semibold text-sm">{c.code}</span>{c.track === "hifdh" && <Badge kind="primary">Hifdh</Badge>}</div>
+                <button key={c.id} type="button"
+                  onClick={() => setClassFilter((v) => (v === c.id ? null : c.id))}
+                  title={active ? "Klik om het klasfilter te wissen" : `Toon alleen inschrijvingen voor ${c.code}`}
+                  style={{
+                    textAlign: "left", cursor: "pointer", width: "100%", padding: 12, borderRadius: 10,
+                    background: active ? "var(--primary-soft)" : "var(--bg-sunken)",
+                    border: "1px solid " + (active ? "var(--primary)" : cnt.concept > cap ? "var(--danger)" : "var(--border)"),
+                    boxShadow: active ? "0 0 0 1px var(--primary)" : undefined,
+                  }}>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="font-semibold text-sm" style={{ color: active ? "var(--primary)" : undefined }}>{c.code}</span>
+                    <span className="flex items-center gap-1">
+                      {c.track === "hifdh" && <Badge kind="primary">Hifdh</Badge>}
+                      {active && <Icon name="check" size={12} />}
+                    </span>
+                  </div>
                   <div className="flex items-baseline gap-1" style={{ marginBottom: 4 }}>
                     <span style={{ fontSize: 18, fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>{cnt.concept}</span>
                     <span style={{ fontSize: 12, color: "var(--fg-subtle)" }}>/ {cap}</span>
@@ -190,7 +220,7 @@ export function Klassenindeler({ enrollments }: { enrollments: Enrollment[] }) {
                   </div>
                   <div style={{ height: 6, background: "var(--bg-elev)", borderRadius: 999, overflow: "hidden" }}><div style={{ height: "100%", width: Math.min(100, ratio * 100) + "%", background: fill, borderRadius: 999 }} /></div>
                   <div className="text-xs text-subtle mt-2 flex justify-between"><span>Concept</span><span><b style={{ color: "var(--success)" }}>{cnt.definitief}</b> definitief</span></div>
-                </div>
+                </button>
               );
             })}
           </div>
@@ -210,6 +240,25 @@ export function Klassenindeler({ enrollments }: { enrollments: Enrollment[] }) {
               </button>
             );
           })}
+
+          <span style={{ width: 1, alignSelf: "stretch", background: "var(--border)", margin: "0 4px" }} />
+
+          {/* Twijfel staat los van de status: een inschrijving kan toegezegd zijn
+              én twijfelachtig. Daarom een eigen filter met eigen telling. */}
+          <button onClick={() => setOnlyTwijfel((v) => !v)}
+            title={onlyTwijfel ? "Toon weer alle inschrijvingen" : "Toon alleen inschrijvingen waar je over twijfelt"}
+            style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 10px", borderRadius: 999, fontSize: 12, fontWeight: 500, cursor: "pointer", border: "1px solid " + (onlyTwijfel ? "var(--warn)" : "var(--border)"), background: onlyTwijfel ? "var(--warn-soft)" : "var(--bg-elev)", color: onlyTwijfel ? "var(--warn)" : "var(--fg-muted)" }}>
+            <b style={{ fontSize: 13, lineHeight: 1 }}>?</b> Twijfel
+            <span style={{ fontVariantNumeric: "tabular-nums", fontWeight: 600, padding: "0 5px", borderRadius: 999, background: onlyTwijfel ? "var(--warn)" : "var(--bg-sunken)", color: onlyTwijfel ? "var(--bg-elev)" : "var(--fg-subtle)" }}>{twijfelCount}</span>
+            {onlyTwijfel && <Icon name="check" size={11} />}
+          </button>
+
+          {classFilter && (
+            <button onClick={() => setClassFilter(null)}
+              style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 10px", borderRadius: 999, fontSize: 12, fontWeight: 500, cursor: "pointer", border: "1px solid var(--primary)", background: "var(--primary-soft)", color: "var(--primary)" }}>
+              Klas {classCode[classFilter] ?? "?"} <Icon name="x" size={11} />
+            </button>
+          )}
         </div>
         <table className="table">
           <thead><tr>
@@ -226,6 +275,7 @@ export function Klassenindeler({ enrollments }: { enrollments: Enrollment[] }) {
             {indelen.map((e) => {
               const p = pmap[e.id] ?? ({} as Partial<Placement>);
               const isDef = !!p.definitief;
+              const blockers = finalizeBlockers(p as Placement);
               const eligible = (classes ?? []).filter((c) => (e.track === "hifdh" ? c.track === "hifdh" : c.track !== "hifdh"));
               return (
                 <tr key={e.id} onClick={() => setSelected(e)} style={{ background: ROW_BG[e.status] ?? "transparent", cursor: "pointer" }} title="Open inschrijving">
@@ -233,9 +283,14 @@ export function Klassenindeler({ enrollments }: { enrollments: Enrollment[] }) {
                     <div className="font-semibold">{e.child_name}</div>
                     <div className="text-xs text-subtle font-mono">{dateTimeNL(e.submitted_at ?? e.created_at)}</div>
                   </td>
-                  <td><Badge kind={STATUS_KIND[e.status] ?? "info"}>{STATUS_TITLE[e.status] ?? e.status}</Badge></td>
+                  <td>
+                    <span className="flex items-center gap-1" style={{ flexWrap: "wrap" }}>
+                      <Badge kind={STATUS_KIND[e.status] ?? "info"}>{STATUS_TITLE[e.status] ?? e.status}</Badge>
+                      {e.twijfel && <Badge kind="warn" dot>Twijfel</Badge>}
+                    </span>
+                  </td>
                   <td>{e.preferred_lesday ? <Badge kind={e.preferred_lesday === "Geen voorkeur" ? "default" : "info"}>{e.preferred_lesday}</Badge> : <span className="text-subtle">—</span>}</td>
-                  <td className="num">{e.age != null ? e.age + " jr" : "—"}</td>
+                  <td className="num">{ageLabel(e, { approx: true })}</td>
                   <td onClick={(ev) => ev.stopPropagation()}>
                     <Select value={p.class_id ?? ""} style={{ minWidth: 150 }} onChange={(ev) => patch(e, { class_id: ev.target.value || null })}>
                       <option value="">— kies klas —</option>
@@ -261,14 +316,28 @@ export function Klassenindeler({ enrollments }: { enrollments: Enrollment[] }) {
                       <Btn size="sm" kind={e.status === "toegezegd" ? "primary" : "default"} disabled={updateStatus.isPending}
                         title={e.status === "toegezegd" ? "Klik om Toegezegd weer weg te halen" : "Toezeggen"}
                         onClick={() => setStatus(e, "toegezegd")}>Toegezegd</Btn>
-                      <Btn size="sm" kind={isDef ? "primary" : "default"} icon="check" disabled={(!p.class_id || !p.niveau) && !isDef || finalize.isPending}
-                        onClick={() => { if (!isDef) doFinalize(e); }}
-                        title={isDef ? "Definitief ingeschreven" : (!p.class_id || !p.niveau ? "Kies eerst klas en niveau" : "Definitief inschrijven")}>
-                        Definitief
-                      </Btn>
+                      <div className="flex-col" style={{ alignItems: "flex-end", gap: 2 }}>
+                        <Btn size="sm" kind={isDef ? "primary" : "default"} icon="check" disabled={(blockers.length > 0 && !isDef) || finalize.isPending}
+                          onClick={() => { if (!isDef) doFinalize(e); }}
+                          title={isDef ? "Definitief ingeschreven" : blockers.length ? `Kies eerst ${blockers.join(" en ")}` : "Definitief inschrijven"}>
+                          Definitief
+                        </Btn>
+                        {/* De reden stond alleen in een tooltip — die verschijnt
+                            nooit op een touchscreen en zag je dus niet. */}
+                        {!isDef && blockers.length > 0 && (
+                          <span className="text-xs" style={{ color: "var(--fg-faint)", whiteSpace: "nowrap" }}>eerst {blockers.join(" + ")}</span>
+                        )}
+                      </div>
                       <button className="att-pill" data-status={e.status === "afgewezen" ? "O" : "-"} style={{ fontSize: 13 }}
                         title={e.status === "afgewezen" ? "Klik om Afgewezen weer weg te halen" : "Afwijzen"}
                         onClick={() => setStatus(e, "afgewezen")}>✗</button>
+                      {/* Twijfel is een markering náást de status, geen status: je
+                          kunt over een toegezegde inschrijving twijfelen. */}
+                      <button className="att-pill" data-status={e.twijfel ? "L" : "-"} style={{ fontSize: 13 }}
+                        aria-pressed={e.twijfel}
+                        title={e.twijfel ? "Twijfel weghalen" : "Markeren als twijfel"}
+                        onClick={() => toggleTwijfel.mutate({ id: e.id, twijfel: !e.twijfel },
+                          { onError: () => toast("Opslaan mislukt") })}>?</button>
                     </div>
                   </td>
                 </tr>

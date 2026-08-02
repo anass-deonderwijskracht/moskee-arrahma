@@ -1047,6 +1047,8 @@ select:not(.select):not([multiple]) {
   .textarea { min-height: 66px; }
   .pill { min-height: 38px; }
   input[type="checkbox"], input[type="radio"] { width: 20px; height: 20px; }
+  /* Aanwezigheid, afwijzen en twijfel zijn 26px-knopjes — te klein om te tikken. */
+  .att-pill { width: 40px; height: 40px; font-size: 14px; }
   /* Icoonknoppen die inline een kleinere padding forceren, toch aantikbaar. */
   .btn.ghost.sm { min-width: 36px; justify-content: center; }
 

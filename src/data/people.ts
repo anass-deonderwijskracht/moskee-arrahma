@@ -35,7 +35,7 @@ export function useCreateOuder() {
 export function useCreateKind() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (row: { first_name: string; last_name: string; gender: string | null; birth_year: number | null; address: string | null; notes: string | null }) => {
+    mutationFn: async (row: { first_name: string; last_name: string; gender: string | null; birth_year: number | null; birthdate?: string | null; address: string | null; notes: string | null }) => {
       const initials = (row.first_name[0] ?? "").toUpperCase() + (row.last_name.replace(/[^A-Za-z]/g, "")[0] ?? "").toUpperCase();
       const { data, error } = await supabase.from("kinderen").insert({ ...row, initials } as never).select("id").single();
       if (error) throw error;

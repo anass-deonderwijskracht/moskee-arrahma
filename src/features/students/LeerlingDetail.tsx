@@ -12,7 +12,7 @@ import { useSurahs, dateNL } from "@/data/classDetail";
 import { useLeerlingReports, type LeerlingReport } from "@/data/rapporten";
 
 type Tab = "quran" | "attendance" | "tests" | "notes" | "info";
-const currentYear = new Date().getFullYear();
+import { ageLabel } from "@/data/age";
 const evalColor = (e: string | null) => e === "yes" ? "var(--success)" : e === "partial" ? "var(--warn)" : e === "no" ? "var(--danger)" : "var(--border-strong)";
 const evalGlyph = (e: string | null, absent: boolean) => absent ? "—" : e === "yes" ? "✓" : e === "partial" ? "◐" : e === "no" ? "✗" : "·";
 
@@ -26,7 +26,7 @@ export function LeerlingDetail() {
   if (isLoading || !data) return <Loading label="Leerling laden…" />;
 
   const { leerling: l, metrics: m, kinderen } = { leerling: data.leerling, metrics: data.metrics, kinderen: data.leerling.kinderen };
-  const age = kinderen?.birth_year ? currentYear - kinderen.birth_year : null;
+
 
   const tabs: Option<Tab>[] = [
     { value: "quran", label: "Qur'an-voortgang" },
@@ -52,7 +52,7 @@ export function LeerlingDetail() {
         <div style={{ flex: 1, minWidth: 0 }}>
           <div className="flex items-center gap-3 mb-2" style={{ flexWrap: "wrap" }}>
             <Badge kind={(l.classes?.color as BadgeKind) ?? "primary"}>{l.classes?.code}</Badge>
-            <Badge>{age != null ? age + " jaar" : ""} · {kinderen?.gender === "f" ? "♀" : "♂"}</Badge>
+            <Badge>{ageLabel(kinderen ?? {}, { approx: true, unit: "jaar" })} · {kinderen?.gender === "f" ? "♀" : "♂"}</Badge>
             <Badge>{l.schooljaren?.name}</Badge>
           </div>
           <div className="grid-auto" style={{ marginTop: 16 }}>
@@ -79,7 +79,7 @@ export function LeerlingDetail() {
       {tab === "attendance" && <AttendanceTab leerlingId={l.id} attendancePct={m?.attendance_pct ?? null} firstName={kinderen?.first_name ?? ""} />}
       {tab === "tests" && <LeerlingToetsen leerlingId={l.id} />}
       {tab === "notes" && <NotesTab notes={data.notes} />}
-      {tab === "info" && <InfoTab detail={data} age={age} />}
+      {tab === "info" && <InfoTab detail={data} />}
     </Section>
   );
 }
@@ -280,7 +280,7 @@ function NotesTab({ notes }: { notes: { id: string; author: string | null; body:
   );
 }
 
-function InfoTab({ detail, age }: { detail: ReturnType<typeof useLeerlingDetail>["data"] & {}; age: number | null }) {
+function InfoTab({ detail }: { detail: ReturnType<typeof useLeerlingDetail>["data"] & {} }) {
   const toast = useToast();
   const l = detail!.leerling;
   const k = l.kinderen;
@@ -305,7 +305,7 @@ function InfoTab({ detail, age }: { detail: ReturnType<typeof useLeerlingDetail>
           {([
             ["Volledige naam", k?.full_name],
             ["Leerlingnummer", l.leerlingnummer],
-            ["Leeftijd / geslacht", `${age ?? "—"} jaar · ${k?.gender === "f" ? "Meisje" : "Jongen"}`],
+            ["Leeftijd / geslacht", `${ageLabel(k ?? {}, { approx: true, unit: "jaar" })} · ${k?.gender === "f" ? "Meisje" : "Jongen"}`],
             ["Klas", l.classes?.code],
             ["Docent", l.classes?.teachers?.name],
             ["Niveau", l.niveau ?? "—"],

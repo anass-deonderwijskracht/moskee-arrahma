@@ -6,10 +6,10 @@ import { Badge, pct, type BadgeKind } from "@/components/ui";
 import { Loading, ErrorState } from "@/features/_shared/states";
 import { useClassMetrics, type ClassRow } from "@/data/classes";
 
-const currentYear = new Date().getFullYear();
+import { age, ageLabel } from "@/data/age";
 
 interface OverzichtLeerling {
-  id: string; class_id: string; full_name: string; gender: string | null; birth_year: number | null;
+  id: string; class_id: string; full_name: string; gender: string | null; birth_year: number | null; birthdate: string | null;
   parents: { role: string | null; name: string | null; phone: string | null }[];
 }
 
@@ -20,13 +20,13 @@ function useKlassenOverzicht(schooljaarId: string | null) {
     queryFn: async (): Promise<OverzichtLeerling[]> => {
       const { data, error } = await supabase
         .from("leerlingen")
-        .select("id, class_id, kinderen(full_name, gender, birth_year, kind_ouder(ouders(role, name, phone)))")
+        .select("id, class_id, kinderen(full_name, gender, birth_year, birthdate, kind_ouder(ouders(role, name, phone)))")
         .eq("schooljaar_id", schooljaarId!);
       if (error) throw error;
-      type Row = { id: string; class_id: string; kinderen: { full_name: string; gender: string | null; birth_year: number | null; kind_ouder: { ouders: { role: string | null; name: string | null; phone: string | null } | null }[] } | null };
+      type Row = { id: string; class_id: string; kinderen: { full_name: string; gender: string | null; birth_year: number | null; birthdate: string | null; kind_ouder: { ouders: { role: string | null; name: string | null; phone: string | null } | null }[] } | null };
       return ((data as unknown as Row[]) ?? []).map((r) => ({
         id: r.id, class_id: r.class_id,
-        full_name: r.kinderen?.full_name ?? "—", gender: r.kinderen?.gender ?? null, birth_year: r.kinderen?.birth_year ?? null,
+        full_name: r.kinderen?.full_name ?? "—", gender: r.kinderen?.gender ?? null, birth_year: r.kinderen?.birth_year ?? null, birthdate: r.kinderen?.birthdate ?? null,
         parents: (r.kinderen?.kind_ouder ?? []).map((ko) => ko.ouders).filter(Boolean) as OverzichtLeerling["parents"],
       }));
     },
@@ -59,7 +59,7 @@ export function KlassenOverzichtKanban({ classes, schooljaarId }: { classes: Cla
         const cm = metricsMap?.[c.id];
         const boys = ss.filter((s) => s.gender === "m").length;
         const girls = ss.filter((s) => s.gender === "f").length;
-        const ages = ss.map((s) => (s.birth_year ? currentYear - s.birth_year : null)).filter((a): a is number => a != null);
+        const ages = ss.map((s) => age(s)).filter((a): a is number => a != null);
         const avgAge = ages.length ? ages.reduce((a, b) => a + b, 0) / ages.length : 0;
         return (
           <div key={c.id} className="kcol">
@@ -95,13 +95,12 @@ export function KlassenOverzichtKanban({ classes, schooljaarId }: { classes: Cla
             <div className="kcol-body">
               {ss.length === 0 && <div style={{ padding: "20px 10px", textAlign: "center", color: "var(--fg-faint)", fontSize: 12 }}>Geen leerlingen</div>}
               {ss.map((s) => {
-                const age = s.birth_year ? currentYear - s.birth_year : null;
                 return (
                   <div key={s.id} className="kcard" style={{ cursor: "pointer", padding: 10 }} onClick={() => navigate("/students/" + s.id)}>
                     <div className="flex items-center gap-2" style={{ minWidth: 0 }}>
                       <span style={{ width: 6, height: 6, borderRadius: 999, background: s.gender === "m" ? "oklch(0.62 0.12 240)" : "oklch(0.65 0.14 350)", flexShrink: 0 }} />
                       <span className="font-semibold text-sm truncate" style={{ flex: 1, minWidth: 0 }}>{s.full_name}</span>
-                      <span className="text-xs text-subtle font-mono" style={{ flexShrink: 0 }}>{age ?? "—"} jr</span>
+                      <span className="text-xs text-subtle font-mono" style={{ flexShrink: 0 }}>{ageLabel(s, { approx: true })}</span>
                     </div>
                     {s.parents.slice(0, 2).map((p, i) => (
                       <div key={i} className="flex items-center justify-between" style={{ fontSize: 11, paddingTop: 4, borderTop: i === 0 ? "1px solid var(--border)" : "none", marginTop: i === 0 ? 6 : 0 }}>

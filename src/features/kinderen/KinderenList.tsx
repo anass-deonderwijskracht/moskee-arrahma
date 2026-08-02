@@ -8,7 +8,7 @@ import { useTableTools, SortTh, SelectTh, SelectTd, SearchBox, BulkBar, EditTogg
 import { useKinderen, useCreateKind, useDeleteKinderen, useUpdateKind, type KindRow } from "@/data/people";
 import { useCurrentSchooljaar } from "@/data/schooljaren";
 
-const currentYear = new Date().getFullYear();
+import { age, ageLabel, birthYearOf } from "@/data/age";
 
 export function KinderenList() {
   const navigate = useNavigate();
@@ -28,13 +28,17 @@ export function KinderenList() {
     update.mutate({ id: k.id, patch: { first_name: first, last_name: last }, name: { first_name: first, last_name: last } },
       { onError: () => toast("Opslaan mislukt") });
   };
-  const saveField = (id: string, patch: { gender?: string | null; birth_year?: number | null }) =>
+  const saveField = (id: string, patch: { gender?: string | null; birth_year?: number | null; birthdate?: string | null }) =>
     update.mutate({ id, patch }, { onError: () => toast("Opslaan mislukt") });
-  const [form, setForm] = useState({ first_name: "", last_name: "", gender: "", birth_year: "", address: "" });
+  const [form, setForm] = useState({ first_name: "", last_name: "", gender: "", birthdate: "", address: "" });
   const saveKind = async () => {
     try {
-      const id = await createKind.mutateAsync({ first_name: form.first_name.trim(), last_name: form.last_name.trim(), gender: form.gender || null, birth_year: form.birth_year ? parseInt(form.birth_year) : null, address: form.address || null, notes: null });
-      toast("Kind toegevoegd"); setAdding(false); setForm({ first_name: "", last_name: "", gender: "", birth_year: "", address: "" });
+      const id = await createKind.mutateAsync({
+        first_name: form.first_name.trim(), last_name: form.last_name.trim(), gender: form.gender || null,
+        birthdate: form.birthdate || null, birth_year: birthYearOf(form.birthdate),
+        address: form.address || null, notes: null,
+      });
+      toast("Kind toegevoegd"); setAdding(false); setForm({ first_name: "", last_name: "", gender: "", birthdate: "", address: "" });
       navigate("/kinderen/" + id);
     } catch (e) { toast("Toevoegen mislukt: " + (e instanceof Error ? e.message : "")); }
   };
@@ -49,7 +53,7 @@ export function KinderenList() {
     sorters: {
       name: (k) => k.full_name,
       gender: (k) => k.gender,
-      age: (k) => (k.birth_year ? currentYear - k.birth_year : null),
+      age: (k) => age(k),
       klas: (k) => klasOf(k),
     },
     initialSort: { key: "name", dir: "asc" },
@@ -89,7 +93,7 @@ export function KinderenList() {
                 <SelectTh allChecked={tools.allChecked} onToggle={tools.toggleAll} />
                 <SortTh label="Kind" k="name" sort={tools.sort} onSort={tools.toggleSort} />
                 <SortTh label="Geslacht" k="gender" sort={tools.sort} onSort={tools.toggleSort} />
-                <SortTh label={editing ? "Geboortejaar" : "Leeftijd"} k="age" sort={tools.sort} onSort={tools.toggleSort} />
+                <SortTh label={editing ? "Geboortedatum" : "Leeftijd"} k="age" sort={tools.sort} onSort={tools.toggleSort} />
                 <SortTh label="Huidig jaar (klas)" k="klas" sort={tools.sort} onSort={tools.toggleSort} />
                 <th>Ouders</th>
                 <th style={{ width: 1 }}></th>
@@ -98,7 +102,6 @@ export function KinderenList() {
             <tbody>
               {rows.map((k) => {
                 const current = k.leerlingen.find((l) => l.schooljaar_id === sj?.id) ?? k.leerlingen[0];
-                const age = k.birth_year ? currentYear - k.birth_year : null;
                 const isChecked = tools.checked.has(k.id);
                 return (
                   <tr key={k.id} onClick={editing ? undefined : () => navigate("/kinderen/" + k.id)} className={isChecked ? "selected" : ""}>
@@ -129,15 +132,17 @@ export function KinderenList() {
                     </td>
                     <td className="num" onClick={editing ? (e) => e.stopPropagation() : undefined}>
                       {editing ? (
-                        <input key={`gj:${k.birth_year}`} className="input" type="number" placeholder="geb.jaar" aria-label="Geboortejaar"
-                          style={{ width: 92 }} defaultValue={k.birth_year ?? ""}
+                        <input key={`gb:${k.birthdate}`} className="input" type="date" aria-label="Geboortedatum"
+                          style={{ width: 150 }} defaultValue={k.birthdate ?? ""}
                           onBlur={(e) => {
-                            const v = e.target.value.trim();
-                            const n = v === "" ? null : parseInt(v, 10);
-                            if (n !== null && Number.isNaN(n)) return;
-                            if (n !== k.birth_year) saveField(k.id, { birth_year: n });
+                            const v = e.target.value || null;
+                            if (v !== k.birthdate) saveField(k.id, { birthdate: v, birth_year: birthYearOf(v) ?? k.birth_year });
                           }} />
-                      ) : age ?? "—"}
+                      ) : (
+                        <span title={k.birthdate ? undefined : "Alleen geboortejaar bekend — vul de geboortedatum in voor een exacte leeftijd"}>
+                          {ageLabel(k, { approx: true })}
+                        </span>
+                      )}
                     </td>
                     <td className="text-sm">{current?.classes?.code ?? <span className="text-subtle">geen</span>}</td>
                     <td>
@@ -165,7 +170,7 @@ export function KinderenList() {
           </div>
           <div className="grid-3" style={{ gridTemplateColumns: "1fr 1fr" }}>
             <Field label="Geslacht"><Select value={form.gender} onChange={(e) => setForm((f) => ({ ...f, gender: e.target.value }))}><option value="">—</option><option value="m">Jongen</option><option value="f">Meisje</option></Select></Field>
-            <Field label="Geboortejaar"><input className="input" type="number" value={form.birth_year} onChange={(e) => setForm((f) => ({ ...f, birth_year: e.target.value }))} placeholder="bv. 2017" /></Field>
+            <Field label="Geboortedatum"><input className="input" type="date" value={form.birthdate} onChange={(e) => setForm((f) => ({ ...f, birthdate: e.target.value }))} /></Field>
           </div>
           <Field label="Adres"><input className="input" value={form.address} onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))} /></Field>
         </Modal>
