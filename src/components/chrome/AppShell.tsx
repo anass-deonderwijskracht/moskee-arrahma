@@ -76,6 +76,20 @@ export function AppShell() {
   }, []);
   useEffect(() => () => window.clearTimeout(peekTimer.current), []);
 
+  // Zonder knop op de pagina is hoveren de enige manier om de balk terug te
+  // halen — met Ctrl/Cmd+B lukt het ook zonder muis.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key.toLowerCase() !== "b" || !(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey) return;
+      e.preventDefault();
+      window.clearTimeout(peekTimer.current);
+      setPeeking(false);
+      setCollapsed((c) => !c);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   // Close the mobile drawer whenever the route changes; een klik op een menu-item
   // laat ook het zwevende paneel meteen weer verdwijnen.
   useEffect(() => {
@@ -113,17 +127,12 @@ export function AppShell() {
         />
       )}
       {sidebarCollapsed && (
-        <>
-          <div
-            className="sidebar-hotzone"
-            aria-hidden="true"
-            onMouseEnter={() => schedulePeek(true)}
-            onMouseLeave={() => schedulePeek(false)}
-          />
-          <button className="sidebar-reveal" onClick={dock} title="Zijbalk uitklappen" aria-label="Zijbalk uitklappen">
-            <Icon name="panelLeft" size={16} />
-          </button>
-        </>
+        <div
+          className="sidebar-hotzone"
+          aria-hidden="true"
+          onMouseEnter={() => schedulePeek(true)}
+          onMouseLeave={() => schedulePeek(false)}
+        />
       )}
       {mobileNavOpen && <div className="nav-backdrop" onClick={() => setMobileNavOpen(false)} />}
       <div className="main">

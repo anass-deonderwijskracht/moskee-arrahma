@@ -17,8 +17,10 @@
 // tabblad Ouders (`ouders`), met terugval op de aanmelding (`enrollment_parents`)
 // voor gezinnen die nog niet definitief zijn (zie contactName.ts hiernaast).
 //
-// Auth: admin-JWT (vanuit de app) óf de service-role key als bearer (machine,
-// bijv. vanuit fillout-intake).
+// Auth: admin-JWT (vanuit de app), de service-role key als bearer (machine,
+// bijv. vanuit fillout-intake), of de header x-sync-secret met
+// CONTACTS_SYNC_SECRET (de nachtelijke pg_cron-planner). Deploy met
+// --no-verify-jwt: deze controle is dan de enige poort.
 //
 // Staan er meerdere contacten met hetzelfde nummer (de oude import maakte per
 // schooljaar een aparte kaart: AO-23, AO-24, AO-25), dan worden die SAMENGEVOEGD:
@@ -148,6 +150,14 @@ async function deleteContact(token: string, resourceName: string): Promise<void>
     const body = await res.json().catch(() => ({}));
     throw new Error(`Verwijderen mislukt (${res.status}): ${body?.error?.message ?? ""}`);
   }
+}
+
+/** Runs ouder dan een kwartaal opruimen; met een dagelijkse planner groeit dit anders eindeloos. */
+const RUN_RETENTION_DAYS = 90;
+// deno-lint-ignore no-explicit-any
+async function pruneRuns(service: any): Promise<void> {
+  const cutoff = new Date(Date.now() - RUN_RETENTION_DAYS * 86_400_000).toISOString();
+  await service.from("google_contact_sync_runs").delete().lt("started_at", cutoff);
 }
 
 const nameOf = (p: GPerson) => joinNameParts(p.names?.[0] ?? {});
@@ -378,13 +388,18 @@ Deno.serve(async (req: Request) => {
 
   const service = createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: false } });
 
-  // --- Auth: admin-JWT of de service-role key (machine-aanroep) --------------
+  // --- Auth: gedeeld secret (planner), service-role key (machine) of admin-JWT -
+  // De function draait met --no-verify-jwt, dus deze controle is de enige poort.
   const authHeader = req.headers.get("Authorization") ?? "";
   const bearer = authHeader.replace(/^Bearer\s+/i, "").trim();
-  let runBy: string | null = null;
-  let runByName: string | null = "Automatisch";
+  const syncSecret = Deno.env.get("CONTACTS_SYNC_SECRET");
+  const provided = req.headers.get("x-sync-secret");
+  const fromCron = !!syncSecret && provided === syncSecret;
 
-  if (bearer !== SERVICE_KEY) {
+  let runBy: string | null = null;
+  let runByName: string | null = fromCron ? "Automatisch (nachtelijke sync)" : "Automatisch";
+
+  if (!fromCron && bearer !== SERVICE_KEY) {
     const userClient = createClient(SUPABASE_URL, ANON_KEY, { global: { headers: { Authorization: authHeader } } });
     const { data: { user }, error: userErr } = await userClient.auth.getUser();
     if (userErr || !user) return json({ error: "unauthorized" }, 401);
@@ -542,7 +557,15 @@ Deno.serve(async (req: Request) => {
       noPhone,
       plan,
     };
-    await finish({ ok: true, created, updated, unchanged, merged, deleted, conflicts, skipped: noPhone.length, plan });
+    // In het log alleen de gewijzigde regels bewaren. Bij een nachtelijke run
+    // verandert er meestal niets, en "ongewijzigd" × honderden ouders × elke dag
+    // zou de database vullen met ruis. Het scherm krijgt wél het volledige plan.
+    const changed = plan.filter((r) => r.action !== "unchanged");
+    await finish({
+      ok: true, created, updated, unchanged, merged, deleted, conflicts,
+      skipped: noPhone.length, plan: changed,
+    });
+    await pruneRuns(service);
     return json(result);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

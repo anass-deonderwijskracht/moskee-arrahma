@@ -156,15 +156,28 @@ en is gedekt door 53 tests — dit is het stuk dat bij een fout honderden
 contacten tegelijk zou verminken.
 
 **Draaien**: Instellingen → Google Contacts. Eerst *Controleren* (dry-run,
-schrijft niets), dan pas *Doorvoeren*. Nieuwe aanmeldingen via het formulier
-triggeren de sync automatisch. Elke run wordt vastgelegd in
-`google_contact_sync_runs`.
+schrijft niets), dan pas *Doorvoeren*.
+
+**Automatisch** gebeurt het op twee momenten: een nieuwe aanmelding via het
+formulier triggert de sync direct, en `pg_cron` draait hem elke nacht (migratie
+`026`, 23:00 UTC — 00:00 Nederlandse tijd in de winter, 01:00 in de zomer). Dat
+tweede is nodig omdat wat je in de app zélf doet — een status wijzigen, een kind
+indelen, een naam corrigeren — geen trigger heeft.
+
+Elke run wordt vastgelegd in `google_contact_sync_runs`. Daarin komen alleen de
+**gewijzigde** regels; een nachtelijke run waarin niets verandert kost zo bijna
+geen opslag. Runs ouder dan 90 dagen worden automatisch opgeruimd.
 
 **Deployen + secrets**:
 ```bash
-supabase functions deploy google-contacts-sync
+supabase functions deploy google-contacts-sync --no-verify-jwt
 supabase secrets set GOOGLE_CLIENT_ID=... GOOGLE_CLIENT_SECRET=... GOOGLE_REFRESH_TOKEN=...
+supabase secrets set CONTACTS_SYNC_SECRET=<kies-een-geheim>
 ```
+`--no-verify-jwt` omdat de function haar eigen autorisatie doet: het gedeelde
+sync-secret (planner), de service-role key (fillout-intake) of een admin-JWT
+(de app). Zet hetzelfde geheim ook in de Vault, zodat het niet in deze publieke
+repo hoeft te staan — zie de instructies boven in migratie `026`.
 Het refresh-token hoort bij het Google-account waar de contacten op staan.
 Haal het op via de OAuth Playground **met "Use your own OAuth credentials"
 aangevinkt** (anders trekt Google het na 24 uur in) en zet het OAuth consent
