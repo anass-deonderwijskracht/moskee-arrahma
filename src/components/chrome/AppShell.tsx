@@ -60,7 +60,10 @@ const PEEK_CLOSE_DELAY = 220;
 
 export function AppShell() {
   const { tweaks, set } = useTweaks();
-  const [collapsed, setCollapsed] = useState(false);
+  // Bewust in de opgeslagen weergave-instellingen: eenmaal ingeklapt blijft de
+  // balk ingeklapt tot de gebruiker hem zelf weer vastzet — ook na een refresh.
+  const collapsed = tweaks.sidebarCollapsed;
+  const setCollapsed = useCallback((v: boolean) => set("sidebarCollapsed", v), [set]);
   const [peeking, setPeeking] = useState(false);
   const isMobile = useIsMobile();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -84,11 +87,11 @@ export function AppShell() {
       e.preventDefault();
       window.clearTimeout(peekTimer.current);
       setPeeking(false);
-      setCollapsed((c) => !c);
+      setCollapsed(!collapsed);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  }, [collapsed, setCollapsed]);
 
   // Close the mobile drawer whenever the route changes; een klik op een menu-item
   // laat ook het zwevende paneel meteen weer verdwijnen.

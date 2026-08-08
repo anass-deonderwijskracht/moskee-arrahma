@@ -10,6 +10,8 @@ export interface Tweaks {
   density: Density;
   navigation: Navigation;
   accent: Accent;
+  /** Ingeklapte zijbalk blijft ingeklapt, ook na een refresh. */
+  sidebarCollapsed: boolean;
 }
 
 const DEFAULTS: Tweaks = {
@@ -17,6 +19,7 @@ const DEFAULTS: Tweaks = {
   density: "comfortable",
   navigation: "sidebar",
   accent: "petrol",
+  sidebarCollapsed: false,
 };
 
 export const ACCENT_PALETTES: Record<Accent, Record<string, string>> = {
