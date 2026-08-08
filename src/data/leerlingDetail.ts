@@ -14,6 +14,24 @@ export function useAddPayment(leerlingId: string) {
   });
 }
 
+/** Notitie over deze leerling; een les koppelen is optioneel. */
+export function useAddLeerlingNote(leerlingId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ body, lessonId }: { body: string; lessonId: string | null }) => {
+      const { data: me } = await supabase.auth.getUser();
+      const author = me.user
+        ? ((await supabase.from("profiles").select("full_name").eq("id", me.user.id).maybeSingle()).data?.full_name ?? null)
+        : null;
+      const { error } = await supabase.from("lesson_notes").insert({
+        leerling_id: leerlingId, lesson_id: lessonId, body, author,
+      } as never);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["leerling-detail", leerlingId] }),
+  });
+}
+
 export interface LeerlingDetail {
   leerling: Tables<"leerlingen"> & {
     kinderen: Tables<"kinderen"> | null;
@@ -25,7 +43,14 @@ export interface LeerlingDetail {
   assignments: (Tables<"quran_assignments"> & { lessonDate: string | null })[];
   progress: { surah_n: number; status: string }[];
   ouders: Tables<"ouders">[];
-  notes: { id: string; author: string | null; body: string | null; created_at: string; lessonDate: string | null; topic: string | null }[];
+  notes: {
+    id: string; author: string | null; body: string | null; created_at: string;
+    lessonDate: string | null; topic: string | null;
+    /** True als de notitie over déze leerling gaat; anders is het een klasnotitie. */
+    own: boolean;
+  }[];
+  /** Lessen van de klas, voor de optionele koppeling bij een nieuwe notitie. */
+  lessons: { id: string; date: string; topic: string | null }[];
 }
 
 export function useLeerlingDetail(id: string | undefined) {
@@ -65,20 +90,29 @@ export function useLeerlingDetail(id: string | undefined) {
         ouders = ((data ?? []) as unknown as { ouders: Tables<"ouders"> }[]).map((r) => r.ouders).filter(Boolean);
       }
 
-      // lesson notes for the class
+      // Notities: die van de klas (via de lessen) plus die van deze leerling zelf.
       const lessonIds = [...lessonMap.keys()];
-      let notes: LeerlingDetail["notes"] = [];
-      if (lessonIds.length) {
-        const { data } = await supabase
-          .from("lesson_notes")
-          .select("id,author,body,created_at,lesson_id")
-          .in("lesson_id", lessonIds)
-          .order("created_at", { ascending: false });
-        notes = ((data ?? []) as { id: string; author: string | null; body: string | null; created_at: string; lesson_id: string }[]).map((n) => ({
+      type NoteRow = { id: string; author: string | null; body: string | null; created_at: string; lesson_id: string | null; leerling_id: string | null };
+      const filters = [`leerling_id.eq.${id!}`];
+      if (lessonIds.length) filters.push(`lesson_id.in.(${lessonIds.join(",")})`);
+      const { data: noteRows } = await supabase
+        .from("lesson_notes")
+        .select("id,author,body,created_at,lesson_id,leerling_id")
+        .or(filters.join(","))
+        .order("created_at", { ascending: false });
+
+      const notes = ((noteRows ?? []) as NoteRow[]).map((n) => {
+        const les = n.lesson_id ? lessonMap.get(n.lesson_id) : undefined;
+        return {
           id: n.id, author: n.author, body: n.body, created_at: n.created_at,
-          lessonDate: lessonMap.get(n.lesson_id)?.date ?? null, topic: lessonMap.get(n.lesson_id)?.topic ?? null,
-        }));
-      }
+          lessonDate: les?.date ?? null, topic: les?.topic ?? null,
+          own: n.leerling_id === id,
+        };
+      });
+
+      const lessons = [...lessonMap.entries()]
+        .map(([lid, v]) => ({ id: lid, date: v.date, topic: v.topic }))
+        .sort((a, b) => b.date.localeCompare(a.date));
 
       return {
         leerling: l,
@@ -88,6 +122,7 @@ export function useLeerlingDetail(id: string | undefined) {
         progress: (progressRes.data as { surah_n: number; status: string }[]) ?? [],
         ouders,
         notes,
+        lessons,
       };
     },
   });

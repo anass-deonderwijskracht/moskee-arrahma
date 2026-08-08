@@ -7,7 +7,8 @@ import { Modal, Field, ModalFooter } from "@/components/ui/Modal";
 import { LineChart, type LinePoint } from "@/components/ui/LineChart";
 import { Loading, ErrorState } from "@/features/_shared/states";
 import { useToast } from "@/components/chrome/Toast";
-import { useLeerlingDetail, useAddPayment } from "@/data/leerlingDetail";
+// De component heet ook LeerlingDetail; het type krijgt daarom een eigen naam.
+import { useLeerlingDetail, useAddPayment, useAddLeerlingNote, type LeerlingDetail as LeerlingDetailData } from "@/data/leerlingDetail";
 import { useSurahs, dateNL } from "@/data/classDetail";
 import { useLeerlingReports, type LeerlingReport } from "@/data/rapporten";
 
@@ -20,7 +21,7 @@ export function LeerlingDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { data, isLoading, isError, error } = useLeerlingDetail(id);
-  const [tab, setTab] = useState<Tab>("quran");
+  const [tab, setTab] = useState<Tab>("info");
 
   if (isError) return <ErrorState error={error} />;
   if (isLoading || !data) return <Loading label="Leerling laden…" />;
@@ -29,11 +30,11 @@ export function LeerlingDetail() {
 
 
   const tabs: Option<Tab>[] = [
+    { value: "info", label: "Algemene info" },
     { value: "quran", label: "Qur'an-voortgang" },
     { value: "attendance", label: "Aanwezigheid" },
     { value: "tests", label: "Toetsen" },
     { value: "notes", label: "Notities" },
-    { value: "info", label: "Algemene info" },
   ];
 
   return (
@@ -78,7 +79,7 @@ export function LeerlingDetail() {
       {tab === "quran" && <QuranTab progress={data.progress} assignments={data.assignments} />}
       {tab === "attendance" && <AttendanceTab leerlingId={l.id} attendancePct={m?.attendance_pct ?? null} firstName={kinderen?.first_name ?? ""} />}
       {tab === "tests" && <LeerlingToetsen leerlingId={l.id} />}
-      {tab === "notes" && <NotesTab notes={data.notes} />}
+      {tab === "notes" && <NotesTab leerlingId={l.id} notes={data.notes} lessons={data.lessons} />}
       {tab === "info" && <InfoTab detail={data} />}
     </Section>
   );
@@ -259,22 +260,69 @@ function LeerlingToetsen({ leerlingId }: { leerlingId: string }) {
   );
 }
 
-function NotesTab({ notes }: { notes: { id: string; author: string | null; body: string | null; created_at: string; lessonDate: string | null; topic: string | null }[] }) {
+function NotesTab({ leerlingId, notes, lessons }: {
+  leerlingId: string;
+  notes: LeerlingDetailData["notes"];
+  lessons: LeerlingDetailData["lessons"];
+}) {
+  const toast = useToast();
+  const addNote = useAddLeerlingNote(leerlingId);
+  const [adding, setAdding] = useState(false);
+  const [body, setBody] = useState("");
+  const [lessonId, setLessonId] = useState("");
+
+  const close = () => { setAdding(false); setBody(""); setLessonId(""); };
+  const save = async () => {
+    const text = body.trim();
+    if (!text) return;
+    try {
+      await addNote.mutateAsync({ body: text, lessonId: lessonId || null });
+      toast("Notitie toegevoegd"); close();
+    } catch (e) { toast("Toevoegen mislukt: " + (e instanceof Error ? e.message : "")); }
+  };
+
   return (
-    <Card title="Notities" sub="Uit lesnotities van de les-administratie">
-      {notes.length === 0 ? <div className="empty">Nog geen lesnotities voor de klas van deze leerling.</div> : (
+    <Card title="Notities" sub="Over deze leerling, plus de lesnotities van zijn klas"
+      action={<Btn size="sm" icon="plus" onClick={() => setAdding(true)}>Notitie toevoegen</Btn>}>
+      {notes.length === 0 ? <div className="empty">Nog geen notities voor deze leerling.</div> : (
         <div className="flex-col gap-3">
           {notes.map((n) => (
-            <div key={n.id} style={{ padding: 14, borderRadius: 10, background: "var(--bg-sunken)", border: "1px solid var(--border)" }}>
-              <div className="flex items-center gap-2 mb-2 text-xs">
+            <div key={n.id} style={{ padding: 14, borderRadius: 10, background: "var(--bg-sunken)", border: "1px solid " + (n.own ? "var(--primary)" : "var(--border)") }}>
+              <div className="flex items-center gap-2 mb-2 text-xs" style={{ flexWrap: "wrap" }}>
                 <Avatar name={n.author ?? "?"} size="sm" />
-                <b>{n.author}</b>
-                <span className="text-subtle">· {new Date(n.created_at).toLocaleDateString("nl-NL")}{n.topic ? " · " + n.topic : ""}</span>
+                <b>{n.author ?? "Onbekend"}</b>
+                <span className="text-subtle">
+                  · {new Date(n.created_at).toLocaleDateString("nl-NL")}
+                  {n.lessonDate ? " · les " + new Date(n.lessonDate).toLocaleDateString("nl-NL") : ""}
+                  {n.topic ? " · " + n.topic : ""}
+                </span>
+                {!n.own && <Badge>Klas</Badge>}
               </div>
-              <div className="text-sm">{n.body}</div>
+              <div className="text-sm" style={{ whiteSpace: "pre-wrap" }}>{n.body}</div>
             </div>
           ))}
         </div>
+      )}
+
+      {adding && (
+        <Modal title="Notitie toevoegen" sub="Over deze leerling" onClose={close}
+          footer={<ModalFooter onCancel={close} onSave={save} saving={addNote.isPending} disabled={!body.trim()} />}>
+          <Field label="Notitie">
+            <textarea className="textarea" rows={5} autoFocus value={body} onChange={(e) => setBody(e.target.value)}
+              placeholder="Wat wil je vastleggen?" />
+          </Field>
+          <Field label="Koppelen aan een les (optioneel)">
+            <Select value={lessonId} onChange={(e) => setLessonId(e.target.value)}>
+              <option value="">— geen les —</option>
+              {lessons.map((ls) => (
+                <option key={ls.id} value={ls.id}>
+                  {new Date(ls.date).toLocaleDateString("nl-NL", { day: "numeric", month: "short", year: "numeric" })}
+                  {ls.topic ? ` · ${ls.topic}` : ""}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        </Modal>
       )}
     </Card>
   );
@@ -324,7 +372,7 @@ function InfoTab({ detail }: { detail: ReturnType<typeof useLeerlingDetail>["dat
           <Card key={p.id} title={<span className="flex items-center gap-2"><Icon name="user" size={14} />{p.role} (Ouder/voogd {i + 1}){p.primary && <Badge kind="primary">Primair contact</Badge>}</span>}>
             <div className="flex items-center gap-3 mb-4"><Avatar name={p.name} size="lg" /><div><div className="font-semibold" style={{ fontSize: 15 }}>{p.name}</div><div className="text-xs text-subtle">{p.role}</div></div></div>
             <div className="flex-col gap-2" style={{ fontSize: 13 }}>
-              {([["Telefoon", p.phone, "phone"], ["E-mail", p.email, "mail"], ["Bereikbaarheid", p.bereik ?? "—", "clock"]] as const).map(([key, v, ic]) => (
+              {([["Telefoon", p.phone, "phone"], ["E-mail", p.email, "mail"]] as const).map(([key, v, ic]) => (
                 <div key={key} style={{ display: "grid", gridTemplateColumns: "26px 130px 1fr", gap: 10, paddingBottom: 8, borderBottom: "1px solid var(--border)", alignItems: "center" }}>
                   <Icon name={ic} size={13} style={{ color: "var(--fg-subtle)" }} />
                   <span className="text-muted">{key}</span>

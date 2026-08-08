@@ -20,11 +20,11 @@ export function OudersList() {
   const [adding, setAdding] = useState(false);
   const save = (id: string, patch: Partial<Ouder>) =>
     update.mutate({ id, patch }, { onError: () => toast("Opslaan mislukt") });
-  const [form, setForm] = useState({ role: "Vader", name: "", phone: "", email: "", bereik: "", primary: true });
+  const [form, setForm] = useState({ role: "Vader", name: "", phone: "", email: "", primary: true });
   const saveOuder = async () => {
     try {
       const id = await createOuder.mutateAsync(form);
-      toast("Ouder toegevoegd"); setAdding(false); setForm({ role: "Vader", name: "", phone: "", email: "", bereik: "", primary: true });
+      toast("Ouder toegevoegd"); setAdding(false); setForm({ role: "Vader", name: "", phone: "", email: "", primary: true });
       navigate("/ouders/" + id);
     } catch (e) { toast("Toevoegen mislukt: " + (e instanceof Error ? e.message : "")); }
   };
@@ -39,7 +39,6 @@ export function OudersList() {
       phone: (o) => o.phone,
       email: (o) => o.email,
       kinderen: (o) => o.kind_ouder.length,
-      bereik: (o) => o.bereik,
     },
     initialSort: { key: "name", dir: "asc" },
   });
@@ -81,7 +80,6 @@ export function OudersList() {
                 <SortTh label="Telefoon" k="phone" sort={tools.sort} onSort={tools.toggleSort} />
                 <SortTh label="E-mail" k="email" sort={tools.sort} onSort={tools.toggleSort} />
                 <SortTh label="Kinderen" k="kinderen" sort={tools.sort} onSort={tools.toggleSort} />
-                <SortTh label="Bereikbaarheid" k="bereik" sort={tools.sort} onSort={tools.toggleSort} />
                 <th style={{ width: 1 }}></th>
               </tr>
             </thead>
@@ -121,8 +119,6 @@ export function OudersList() {
                       ))}
                     </div>
                   </td>
-                  <EditableTd editing={editing} className="text-sm text-muted" value={o.bereik ?? ""}
-                    placeholder="bv. Werkdagen na 17:00" onSave={(v) => save(o.id, { bereik: v.trim() || null })} />
                   <td>{!editing && <Icon name="chevronRight" size={14} />}</td>
                 </tr>
                 );
@@ -143,7 +139,6 @@ export function OudersList() {
             <Field label="Telefoon"><input className="input" value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} placeholder="06 …" /></Field>
             <Field label="E-mail"><input className="input" type="email" value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} /></Field>
           </div>
-          <Field label="Bereikbaarheid"><input className="input" value={form.bereik} onChange={(e) => setForm((f) => ({ ...f, bereik: e.target.value }))} placeholder="bv. Werkdagen na 17:00" /></Field>
           <label className="flex items-center gap-2 text-sm" style={{ cursor: "pointer" }}>
             <input type="checkbox" checked={form.primary} onChange={(e) => setForm((f) => ({ ...f, primary: e.target.checked }))} /> Primair contact
           </label>

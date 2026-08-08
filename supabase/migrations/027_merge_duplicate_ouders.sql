@@ -257,24 +257,7 @@ grant execute on function public.finalize_enrollment(uuid) to authenticated;
 
 
 -- ============================================================================
--- PREVIEW — draai dit los, vóór de migratie, om te zien wat er gebeurt.
--- Let vooral op groepen waar de namen van elkaar verschillen: dat kan een
--- gedeelde vaste lijn zijn (vader én moeder op hetzelfde nummer), en dan
--- voegt deze migratie twee verschillende personen samen.
+-- Preview vooraf en controle achteraf staan in:
+--   supabase/checks/027_preview_dubbele_ouders.sql
+-- Die queries lezen alleen en draaien ook vóór deze migratie.
 -- ============================================================================
--- select public.normalize_phone(phone) as nummer,
---        count(*)                      as records,
---        array_agg(name order by created_at) as namen,
---        count(distinct lower(btrim(name))) > 1 as namen_verschillen
---   from public.ouders
---  where public.normalize_phone(phone) is not null
---  group by 1
--- having count(*) > 1
---  order by namen_verschillen desc, records desc;
---
--- Ouders zonder bruikbaar telefoonnummer (blijven ongemoeid):
--- select id, name, phone from public.ouders
---  where public.normalize_phone(phone) is null order by name;
---
--- Achteraf terugkijken wat er is samengevoegd:
--- select * from public.ouders_merge_log order by merged_at desc;

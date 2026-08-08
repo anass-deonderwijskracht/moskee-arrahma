@@ -191,8 +191,8 @@ export interface Database {
         Relationships: [];
       };
       lesson_notes: {
-        Row: { id: string; lesson_id: string; author: string | null; body: string | null; is_draft: boolean } & Timestamps;
-        Insert: { lesson_id: string } & Partial<Database["public"]["Tables"]["lesson_notes"]["Row"]>;
+        Row: { id: string; lesson_id: string | null; leerling_id: string | null; author: string | null; body: string | null; is_draft: boolean } & Timestamps;
+        Insert: Partial<Database["public"]["Tables"]["lesson_notes"]["Row"]>;
         Update: Partial<Database["public"]["Tables"]["lesson_notes"]["Row"]>;
         Relationships: [];
       };

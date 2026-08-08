@@ -23,7 +23,7 @@ export function useSaveTeacher() {
 export function useCreateOuder() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (row: { role: string; name: string; phone: string; email: string; bereik: string; primary: boolean }) => {
+    mutationFn: async (row: { role: string; name: string; phone: string; email: string; primary: boolean }) => {
       const { data, error } = await supabase.from("ouders").insert(row as never).select("id").single();
       if (error) throw error;
       return (data as { id: string }).id;

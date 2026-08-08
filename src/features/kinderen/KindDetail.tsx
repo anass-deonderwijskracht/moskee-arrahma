@@ -1,8 +1,14 @@
+import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { Section, Card, Badge, Btn, Icon, Avatar, QBar, pct, type BadgeKind } from "@/components/ui";
+import { Section, Card, Badge, Btn, Icon, Avatar, QBar, Select, pct, type BadgeKind } from "@/components/ui";
+import { Modal, Field, ModalFooter } from "@/components/ui/Modal";
 import { Loading, ErrorState } from "@/features/_shared/states";
+import { useToast } from "@/components/chrome/Toast";
 import { useKindDetail, type KindYear } from "@/data/relations";
+import { useUpdateKind } from "@/data/people";
 import { ageLabel } from "@/data/age";
+
+const EMPTY = { first_name: "", last_name: "", gender: "", birthdate: "", address: "", notes: "" };
 
 function attendanceOf(y: KindYear, metrics: Record<string, { attendance_pct: number | null }>): number | null {
   if (y.schooljaren?.is_current) return metrics[y.id]?.attendance_pct ?? null;
@@ -12,12 +18,47 @@ function attendanceOf(y: KindYear, metrics: Record<string, { attendance_pct: num
 export function KindDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const toast = useToast();
   const { data, isLoading, isError, error } = useKindDetail(id);
+  const update = useUpdateKind();
+  const [editing, setEditing] = useState(false);
+  const [form, setForm] = useState(EMPTY);
+
+  const k = data?.kind;
+  // Het formulier volgt het geladen kind, ook als dat later binnenkomt.
+  useEffect(() => {
+    if (k) setForm({
+      first_name: k.first_name, last_name: k.last_name, gender: k.gender ?? "",
+      birthdate: k.birthdate ?? "", address: k.address ?? "", notes: k.notes ?? "",
+    });
+  }, [k]);
 
   if (isError) return <ErrorState error={error} />;
-  if (isLoading || !data) return <Loading label="Kind laden…" />;
+  if (isLoading || !data || !k) return <Loading label="Kind laden…" />;
 
-  const { kind: k, years, metrics, ouders, siblings } = data;
+  const { years, metrics, ouders, siblings } = data;
+
+  const save = async () => {
+    const first = form.first_name.trim(), last = form.last_name.trim();
+    if (!first || !last) return;
+    const renamed = first !== k.first_name || last !== k.last_name;
+    try {
+      await update.mutateAsync({
+        id: k.id,
+        patch: {
+          first_name: first, last_name: last,
+          gender: form.gender || null,
+          birthdate: form.birthdate || null,
+          // Geboortejaar volgt de datum, zodat de leeftijd overal klopt.
+          birth_year: form.birthdate ? Number(form.birthdate.slice(0, 4)) : k.birth_year,
+          address: form.address.trim() || null,
+          notes: form.notes.trim() || null,
+        },
+        name: renamed ? { first_name: first, last_name: last } : undefined,
+      });
+      toast("Gegevens opgeslagen"); setEditing(false);
+    } catch (e) { toast("Opslaan mislukt: " + (e instanceof Error ? e.message : "")); }
+  };
 
   const current = years.find((y) => y.schooljaren?.is_current) ?? years[0];
   const currentMetrics = current ? metrics[current.id] : undefined;
@@ -34,7 +75,12 @@ export function KindDetail() {
         </span>
       }
       sub={`${ouders.length} ouder(s)/voogd(en)${siblings.length ? " · " + siblings.length + " broer/zus" : ""}`}
-      actions={current && <Btn kind="primary" onClick={() => navigate("/students/" + current.id)}>Open dit jaar →</Btn>}
+      actions={
+        <>
+          <Btn icon="edit" onClick={() => setEditing(true)}>Bewerken</Btn>
+          {current && <Btn kind="primary" onClick={() => navigate("/students/" + current.id)}>Open dit jaar →</Btn>}
+        </>
+      }
     >
       <div className="detail-hero">
         <Avatar name={k.full_name} initials={k.initials ?? undefined} size="xl" />
@@ -55,14 +101,17 @@ export function KindDetail() {
         </div>
       </div>
 
-      <Card title={<><Icon name="activity" size={14} /> Onderwijshistorie</>} sub="Eén rij per schooljaar — voortgang, klas, docent en eindbeoordeling.">
+      <Card title={<><Icon name="activity" size={14} /> Onderwijshistorie</>} sub="Eén rij per schooljaar — klik een jaar open voor het volledige leerlingdossier.">
         <div className="flex-col gap-3">
           {years.map((y) => {
             const isCurrent = !!y.schooljaren?.is_current;
             const att = attendanceOf(y, metrics);
             const surahs = isCurrent ? (metrics[y.id]?.surahs_known ?? 0) : (y.hist_surahs_known ?? 0);
             return (
-              <div key={y.id} className="grid-auto tight" style={{ padding: 16, borderRadius: 12, background: isCurrent ? "var(--primary-soft)" : "var(--bg-sunken)", border: "1px solid " + (isCurrent ? "var(--primary)" : "var(--border)"), alignItems: "center" }}>
+              <button key={y.id} type="button" className="grid-auto tight"
+                onClick={() => navigate("/students/" + y.id)}
+                title={`Open het leerlingdossier van ${y.schooljaren?.name ?? "dit jaar"}`}
+                style={{ width: "100%", textAlign: "left", cursor: "pointer", padding: 16, borderRadius: 12, background: isCurrent ? "var(--primary-soft)" : "var(--bg-sunken)", border: "1px solid " + (isCurrent ? "var(--primary)" : "var(--border)"), alignItems: "center" }}>
                 <div>
                   <div className="font-mono font-semibold" style={{ fontSize: 15 }}>{y.schooljaren?.name}</div>
                   {isCurrent && <div className="text-xs" style={{ color: "var(--primary)", marginTop: 2, fontWeight: 600 }}>HUIDIG</div>}
@@ -74,10 +123,11 @@ export function KindDetail() {
                   <div className="flex items-center gap-2 mt-1"><div style={{ flex: 1 }}><QBar value={(att ?? 0) * 100} /></div><span className="num text-xs">{pct(att)}</span></div>
                   <div className="text-xs text-subtle mt-2">Surahs: <b style={{ color: "var(--fg)" }}>{surahs}</b></div>
                 </div>
-                <div style={{ textAlign: "right" }}>
+                <div className="flex items-center gap-2" style={{ justifyContent: "flex-end" }}>
                   {y.final_grade ? <Badge kind={y.final_grade === "Zeer goed" ? "success" : y.final_grade === "Goed" ? "primary" : "warn"}>{y.final_grade}</Badge> : <Badge>Lopend</Badge>}
+                  <Icon name="chevronRight" size={14} />
                 </div>
-              </div>
+              </button>
             );
           })}
         </div>
@@ -115,6 +165,26 @@ export function KindDetail() {
           )}
         </Card>
       </div>
+
+      {editing && (
+        <Modal title="Kind bewerken" sub="Basisgegevens — gelden voor alle schooljaren" onClose={() => setEditing(false)}
+          footer={<ModalFooter onCancel={() => setEditing(false)} onSave={save} saving={update.isPending} disabled={!form.first_name.trim() || !form.last_name.trim()} />}>
+          <div className="grid-3" style={{ gridTemplateColumns: "1fr 1fr" }}>
+            <Field label="Voornaam"><input className="input" value={form.first_name} onChange={(e) => setForm((f) => ({ ...f, first_name: e.target.value }))} /></Field>
+            <Field label="Achternaam"><input className="input" value={form.last_name} onChange={(e) => setForm((f) => ({ ...f, last_name: e.target.value }))} /></Field>
+          </div>
+          <div className="grid-3" style={{ gridTemplateColumns: "1fr 1fr" }}>
+            <Field label="Geslacht">
+              <Select value={form.gender} onChange={(e) => setForm((f) => ({ ...f, gender: e.target.value }))}>
+                <option value="">—</option><option value="m">Jongen</option><option value="f">Meisje</option>
+              </Select>
+            </Field>
+            <Field label="Geboortedatum"><input className="input" type="date" value={form.birthdate} onChange={(e) => setForm((f) => ({ ...f, birthdate: e.target.value }))} /></Field>
+          </div>
+          <Field label="Adres"><input className="input" value={form.address} onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))} placeholder="Straat 1, 1234 AB Plaats" /></Field>
+          <Field label="Notities"><textarea className="textarea" rows={3} value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} /></Field>
+        </Modal>
+      )}
     </Section>
   );
 }
