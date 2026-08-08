@@ -123,9 +123,14 @@ doet het verschil. Daardoor is de run idempotent en zelfherstellend. Matchen
 gebeurt op telefoonnummer, genormaliseerd naar E.164, omdat dat het enige veld
 is dat betrouwbaar overeenkomt met de handmatige import.
 
-De naam komt uit de **inschrijving in onze database** plus het achtervoegsel; de
-app is de bron van waarheid. Een naam die in Google is aangepast wordt dus bij de
-volgende sync overschreven. Een bestaand achtervoegsel wordt er altijd eerst
+De naam komt uit **onze database** plus het achtervoegsel; de app is de bron van
+waarheid. Eerst wordt gekeken naar het tabblad **Ouders** (`ouders`), met
+terugval op de aanmelding (`enrollment_parents`) voor gezinnen die nog niet
+definitief zijn — `finalize_enrollment()` kopieert de een naar de ander, dus voor
+definitieve leerlingen bestaan beide en wint wat je in de app beheert. Delen twee
+ouders één telefoonnummer, dan wint het primaire contact. Een naam die in Google
+is aangepast wordt bij de volgende sync overschreven. Een bestaand achtervoegsel
+wordt er altijd eerst
 afgehaald — ook als het in Google een náámcomponent op zichzelf is
 (`familyName = "AO-25"`), zoals de oude import het soms opsloeg — zodat jaartallen
 nooit stapelen tot `AO-25 AO-26 ✅`.

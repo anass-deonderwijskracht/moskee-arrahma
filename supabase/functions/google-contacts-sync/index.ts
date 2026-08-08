@@ -12,9 +12,10 @@
 // Identiteit is het telefoonnummer, genormaliseerd naar E.164. Dat is het enige
 // veld dat betrouwbaar matcht met de handmatige import van vorig jaar.
 //
-// De naam komt uit de inschrijving in onze database, plus het achtervoegsel —
-// de app is de bron van waarheid. Een naam die in Google is aangepast wordt dus
-// overschreven (zie contactName.ts naast deze function).
+// De naam komt uit onze database plus het achtervoegsel — de app is de bron van
+// waarheid, dus een in Google aangepaste naam wordt overschreven. Bron is het
+// tabblad Ouders (`ouders`), met terugval op de aanmelding (`enrollment_parents`)
+// voor gezinnen die nog niet definitief zijn (zie contactName.ts hiernaast).
 //
 // Auth: admin-JWT (vanuit de app) óf de service-role key als bearer (machine,
 // bijv. vanuit fillout-intake).
@@ -250,12 +251,31 @@ function splitName(full: string): NameParts {
 
 // deno-lint-ignore no-explicit-any
 async function buildDesired(service: any): Promise<{ desired: Desired[]; noPhone: string[] }> {
-  const [{ data: enrollments }, { data: parents }, { data: placements }, { data: years }] = await Promise.all([
-    service.from("enrollments").select("id, child_name, status, track"),
-    service.from("enrollment_parents").select("enrollment_id, name, phone, email, is_primary"),
-    service.from("enrollment_placements").select("enrollment_id, schooljaar_id"),
-    service.from("schooljaren").select("id, code, is_current, archived"),
-  ]);
+  const [{ data: enrollments }, { data: parents }, { data: placements }, { data: years }, { data: ouders }] =
+    await Promise.all([
+      service.from("enrollments").select("id, child_name, status, track"),
+      service.from("enrollment_parents").select("enrollment_id, name, phone, email, is_primary"),
+      service.from("enrollment_placements").select("enrollment_id, schooljaar_id"),
+      service.from("schooljaren").select("id, code, is_current, archived"),
+      service.from("ouders").select("name, phone, email, primary"),
+    ]);
+
+  // Het tabblad Ouders bewerkt `ouders`; `enrollment_parents` is de momentopname
+  // bij aanmelding en verandert niet meer als je later de naam corrigeert.
+  // finalize_enrollment() kopieert de een naar de ander, dus voor definitieve
+  // leerlingen bestaan beide. `ouders` wint, want dat is wat je in de app beheert.
+  const ouderByPhone = new Map<string, { name: string; email: string | null; primary: boolean }>();
+  // deno-lint-ignore no-explicit-any
+  for (const o of ((ouders ?? []) as any[])) {
+    const phone = normalizePhone(o.phone);
+    const name = (o.name ?? "").trim();
+    if (!phone || !name) continue;
+    const seen = ouderByPhone.get(phone);
+    // Delen twee ouders één nummer, dan wint het primaire contact.
+    if (!seen || (o.primary && !seen.primary)) {
+      ouderByPhone.set(phone, { name, email: (o.email ?? "").trim() || null, primary: !!o.primary });
+    }
+  }
 
   // Jaartal per inschrijving: het schooljaar van de plaatsing, en zolang die er
   // niet is het eerstvolgende niet-gearchiveerde jaar — dezelfde regel die de
@@ -311,10 +331,11 @@ async function buildDesired(service: any): Promise<{ desired: Desired[]; noPhone
     // Alleen het meest recente jaar bepaalt code en markering: een afwijzing (of
     // een traject) van twee jaar geleden mag het huidige beeld niet sturen.
     const currentRows = acc.rows.filter((r) => r.year === year);
+    const ouder = ouderByPhone.get(acc.phone);
     desired.push({
       phone: acc.phone,
-      name: acc.names[0],
-      email: acc.emails[0] ?? null,
+      name: ouder?.name ?? acc.names[0],
+      email: ouder?.email ?? acc.emails[0] ?? null,
       year,
       code: bestCode(currentRows.map((r) => r.track)),
       marker: bestMarker(currentRows.map((r) => r.status)),
