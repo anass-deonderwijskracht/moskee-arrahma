@@ -119,10 +119,16 @@ twee jaar terug het huidige beeld niet stuurt.
 
 [`supabase/functions/google-contacts-sync`](supabase/functions/google-contacts-sync/index.ts)
 doet een **volledige reconciliatie**: het vergelijkt de database met Google en
-doet het verschil. Daardoor is de run idempotent en zelfherstellend. Van de naam
-wordt alleen het achtervoegsel vervangen — handmatige correcties in Google
-blijven staan. Matchen gebeurt op telefoonnummer, genormaliseerd naar E.164,
-omdat dat het enige veld is dat betrouwbaar overeenkomt met de handmatige import.
+doet het verschil. Daardoor is de run idempotent en zelfherstellend. Matchen
+gebeurt op telefoonnummer, genormaliseerd naar E.164, omdat dat het enige veld
+is dat betrouwbaar overeenkomt met de handmatige import.
+
+De naam komt uit de **inschrijving in onze database** plus het achtervoegsel; de
+app is de bron van waarheid. Een naam die in Google is aangepast wordt dus bij de
+volgende sync overschreven. Een bestaand achtervoegsel wordt er altijd eerst
+afgehaald — ook als het in Google een náámcomponent op zichzelf is
+(`familyName = "AO-25"`), zoals de oude import het soms opsloeg — zodat jaartallen
+nooit stapelen tot `AO-25 AO-26 ✅`.
 
 **Samenvoegen.** De import van vorig jaar maakte per schooljaar een aparte
 kaart, dus dezelfde ouder staat er als `AO-23`, `AO-24` én `AO-25` in met
@@ -135,7 +141,7 @@ Uit te zetten met de schakelaar *Dubbele contacten samenvoegen*; dan worden zulk
 nummers overgeslagen en als conflict gemeld.
 
 De naamlogica staat los in [`contactName.ts`](supabase/functions/google-contacts-sync/contactName.ts)
-en is gedekt door 37 tests — dit is het stuk dat bij een fout honderden
+en is gedekt door 43 tests — dit is het stuk dat bij een fout honderden
 contacten tegelijk zou verminken.
 
 **Draaien**: Instellingen → Google Contacts. Eerst *Controleren* (dry-run,

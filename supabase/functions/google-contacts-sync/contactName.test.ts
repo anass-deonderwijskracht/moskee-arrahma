@@ -73,6 +73,15 @@ describe("parseContactName", () => {
     });
   });
 
+  it("herkent een achtervoegsel dat aan het begin staat", () => {
+    expect(parseContactName("AO-25")).toEqual({ base: "", code: "AO", year: 25, marker: null });
+    expect(parseContactName("AO-25 ✅")).toEqual({ base: "", code: "AO", year: 25, marker: MARKER_OK });
+  });
+
+  it("accepteert ook een viercijferig jaartal", () => {
+    expect(parseContactName("Hassani AO-2025")).toMatchObject({ base: "Hassani", code: "AO", year: 25 });
+  });
+
   it("laat namen met cijfers of streepjes met rust", () => {
     expect(parseContactName("Anne-Marie de Vries")).toMatchObject({ base: "Anne-Marie de Vries", code: null });
     expect(parseContactName("Jan Pieter 2e contact")).toMatchObject({ base: "Jan Pieter 2e contact", code: null });
@@ -151,6 +160,32 @@ describe("applyToNameParts", () => {
   it("ruimt een achtervoegsel op dat in de verkeerde component stond", () => {
     expect(applyToNameParts({ givenName: "Mohamed AO-25", familyName: "Belbachir ✅" }, opts))
       .toEqual({ givenName: "Mohamed", middleName: "", familyName: "Belbachir AO-26 ✅" });
+  });
+
+  it("stript een component die volledig uit het achtervoegsel bestaat", () => {
+    // Zoals de handmatige import het bij sommige contacten opsloeg:
+    // givenName "Oumaima Hassani", familyName "AO-25". Dat leverde eerder
+    // "Oumaima Hassani AO-25 AO-26 ✅" op.
+    expect(joinNameParts(applyToNameParts({ givenName: "Oumaima Hassani", familyName: "AO-25" }, opts)))
+      .toBe("Oumaima Hassani AO-26 ✅");
+  });
+
+  it("houdt de voor-/achternaamsplitsing aan zoals de sync hem aanlevert", () => {
+    expect(applyToNameParts({ givenName: "Oumaima", familyName: "Hassani" }, opts))
+      .toEqual({ givenName: "Oumaima", middleName: "", familyName: "Hassani AO-26 ✅" });
+  });
+
+  it("stapelt geen jaartallen op bij een los achtervoegsel mét markering", () => {
+    expect(joinNameParts(applyToNameParts({ givenName: "Emre karacoban", familyName: "AO-24 ⏳" }, opts)))
+      .toBe("Emre karacoban AO-26 ✅");
+  });
+
+  it("valt terug op de systeemnaam als er na strippen niets overblijft", () => {
+    expect(joinNameParts(applyToNameParts(
+      { givenName: "AO-25", familyName: "✅" },
+      opts,
+      { givenName: "Oumaima", familyName: "Hassani" },
+    ))).toBe("Oumaima Hassani AO-26 ✅");
   });
 
   it("is idempotent over de losse componenten", () => {

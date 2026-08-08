@@ -68,8 +68,8 @@ export function GoogleContactsSettings() {
       >
         <div className="text-sm text-subtle">
           <b>Controleren</b> vergelijkt de database met Google en laat zien wat er zou veranderen, zonder iets te schrijven.
-          Pas <b>Doorvoeren</b> past de contacten daadwerkelijk aan. Van de naam wordt alleen het achtervoegsel
-          vervangen — handmatige correcties in Google blijven staan.
+          Pas <b>Doorvoeren</b> past de contacten daadwerkelijk aan. De naam komt uit de inschrijving hier in de app,
+          met het schooljaar en de status erachter — een naam die in Google is aangepast wordt dus overschreven.
         </div>
         <div className="flex items-center gap-3 mt-3" style={{ flexWrap: "wrap" }}>
           <Toggle checked={merge} onChange={setMerge} label="Dubbele contacten samenvoegen"

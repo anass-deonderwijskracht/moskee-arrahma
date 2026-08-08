@@ -10,9 +10,11 @@
 // haalt de volgende gewoon in.
 //
 // Identiteit is het telefoonnummer, genormaliseerd naar E.164. Dat is het enige
-// veld dat betrouwbaar matcht met de handmatige import van vorig jaar. Namen
-// worden nooit als geheel overschreven: we strippen alleen ons eigen
-// achtervoegsel en plakken het nieuwe erachter (zie contactName.ts naast deze function).
+// veld dat betrouwbaar matcht met de handmatige import van vorig jaar.
+//
+// De naam komt uit de inschrijving in onze database, plus het achtervoegsel —
+// de app is de bron van waarheid. Een naam die in Google is aangepast wordt dus
+// overschreven (zie contactName.ts naast deze function).
 //
 // Auth: admin-JWT (vanuit de app) óf de service-role key als bearer (machine,
 // bijv. vanuit fillout-intake).
@@ -421,8 +423,10 @@ Deno.serve(async (req: Request) => {
         dupes = matches.filter((_, i) => i !== idx);
       }
 
-      const currentParts: Partial<NameParts> = match?.names?.[0] ?? splitName(d.name);
-      const nextParts = applyToNameParts(currentParts, { code: d.code, year: d.year, marker: d.marker });
+      // De naam komt uit ONS systeem, niet uit Google: de inschrijving is de bron
+      // van waarheid. Een eventueel oud achtervoegsel wordt eraf gestript, dus
+      // "Oumaima Hassani" + AO-26 ✅ — nooit een stapeling van oude jaren.
+      const nextParts = applyToNameParts(splitName(d.name), { code: d.code, year: d.year, marker: d.marker });
       const from = match ? nameOf(match) : null;
       const to = joinNameParts(nextParts);
 

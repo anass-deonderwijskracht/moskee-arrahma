@@ -90,7 +90,10 @@ export interface ParsedName {
 const MARKER_SET: string[] = [...MARKERS];
 // Variatieselector (U+FE0F) mag achter een emoji staan; die strippen we mee.
 const VS16 = "️";
-const CODE_RE = /\s([A-Za-z]{2,4})-(\d{2})$/;
+// Het achtervoegsel mag ook een náámcomponent in z'n geheel zijn: de import van
+// vorig jaar zette bij sommige contacten familyName = "AO-25". Vandaar `^|\s`.
+// Vier cijfers ("AO-2025") accepteren we ook; we houden de laatste twee aan.
+const CODE_RE = /(?:^|\s)([A-Za-z]{2,4})-(\d{4}|\d{2})$/;
 
 /**
  * Haalt het achtervoegsel van een bestaande contactnaam af. Strip herhaaldelijk
@@ -122,7 +125,7 @@ export function parseContactName(display: string): ParsedName {
 
     const m = rest.match(CODE_RE);
     if (m) {
-      if (code === null) { code = m[1].toUpperCase(); year = Number(m[2]); }
+      if (code === null) { code = m[1].toUpperCase(); year = Number(m[2]) % 100; }
       rest = rest.slice(0, m.index).trimEnd();
       continue;
     }
@@ -191,14 +194,28 @@ function stripPart(part: string): string {
  *
  * De People API negeert `displayName` bij het schrijven — je moet givenName /
  * familyName zetten. Waar de handmatige import het achtervoegsel heeft gestopt
- * weten we niet, dus: strip het uit álle componenten en plak het daarna achter
- * de laatste gevulde component (familyName, anders middleName, anders givenName).
- * Zo blijft de voor-/achternaamsplitsing intact zoals die in Google staat.
+ * weten we niet (soms is een hele component ván het achtervoegsel), dus: strip
+ * het uit álle componenten en plak het daarna achter de laatste gevulde
+ * component (familyName, anders middleName, anders givenName).
+ *
+ * Blijft er na het strippen niets over — bijvoorbeeld een contact dat alleen
+ * "AO-25" heette — dan valt hij terug op `fallback`, zodat we nooit een naamloos
+ * contact overhouden.
  */
-export function applyToNameParts(parts: Partial<NameParts>, opts: { code: string; year: number; marker: Marker }): NameParts {
-  const given = stripPart(parts.givenName ?? "");
-  const middle = stripPart(parts.middleName ?? "");
-  const family = stripPart(parts.familyName ?? "");
+export function applyToNameParts(
+  parts: Partial<NameParts>,
+  opts: { code: string; year: number; marker: Marker },
+  fallback?: Partial<NameParts>,
+): NameParts {
+  let given = stripPart(parts.givenName ?? "");
+  let middle = stripPart(parts.middleName ?? "");
+  let family = stripPart(parts.familyName ?? "");
+
+  if (!given && !middle && !family && fallback) {
+    given = stripPart(fallback.givenName ?? "");
+    middle = stripPart(fallback.middleName ?? "");
+    family = stripPart(fallback.familyName ?? "");
+  }
 
   const yy = String(((opts.year % 100) + 100) % 100).padStart(2, "0");
   const suffix = `${opts.code.toUpperCase()}-${yy} ${opts.marker}`;
