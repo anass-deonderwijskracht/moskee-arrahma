@@ -17,7 +17,14 @@
 // Auth: admin-JWT (vanuit de app) óf de service-role key als bearer (machine,
 // bijv. vanuit fillout-intake).
 //
-// Body: { dryRun?: boolean (default true) } — de AO/HF-code volgt uit het traject.
+// Staan er meerdere contacten met hetzelfde nummer (de oude import maakte per
+// schooljaar een aparte kaart: AO-23, AO-24, AO-25), dan worden die SAMENGEVOEGD:
+// het nieuwste contact blijft, de gegevens van de andere worden erin getrokken en
+// die andere worden verwijderd. Verwijderde contacten belanden 30 dagen in de
+// prullenbak van Google Contacts.
+//
+// Body: { dryRun?: boolean (default true), merge?: boolean (default true) }
+// De AO/HF-code volgt uit het traject.
 //
 // Secrets: GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REFRESH_TOKEN
 //
@@ -26,7 +33,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
-  applyToNameParts, joinNameParts, normalizePhone, bestMarker, bestCode, yearSuffix,
+  applyToNameParts, joinNameParts, normalizePhone, bestMarker, bestCode, yearSuffix, pickPrimaryIndex,
   type Marker, type NameParts,
 } from "./contactName.ts";
 
@@ -44,7 +51,10 @@ const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const PEOPLE = "https://people.googleapis.com/v1";
-const PERSON_FIELDS = "names,phoneNumbers,emailAddresses,metadata";
+const PERSON_FIELDS =
+  "names,phoneNumbers,emailAddresses,addresses,biographies,organizations,birthdays,urls,metadata";
+/** Lijstvelden die we bij samenvoegen samentrekken, met de sleutel voor "is dit dezelfde waarde?". */
+const LIST_FIELDS = ["phoneNumbers", "emailAddresses", "addresses", "urls"] as const;
 
 // ---------------------------------------------------------------------------
 // Google helpers
@@ -74,8 +84,13 @@ interface GPerson {
   resourceName: string;
   etag?: string;
   names?: { givenName?: string; middleName?: string; familyName?: string; displayName?: string }[];
-  phoneNumbers?: { value?: string }[];
-  emailAddresses?: { value?: string }[];
+  phoneNumbers?: { value?: string; type?: string }[];
+  emailAddresses?: { value?: string; type?: string }[];
+  addresses?: { formattedValue?: string; type?: string }[];
+  urls?: { value?: string; type?: string }[];
+  biographies?: { value?: string; contentType?: string }[];
+  organizations?: { name?: string; title?: string }[];
+  birthdays?: { date?: { year?: number; month?: number; day?: number }; text?: string }[];
 }
 
 async function listConnections(token: string): Promise<GPerson[]> {
@@ -108,18 +123,105 @@ async function createContact(token: string, parts: NameParts, phone: string, ema
   return body as GPerson;
 }
 
-async function updateNames(token: string, resourceName: string, etag: string, parts: NameParts): Promise<GPerson> {
-  const res = await fetch(`${PEOPLE}/${resourceName}:updateContact?updatePersonFields=names`, {
+async function updatePerson(
+  token: string, resourceName: string, etag: string, fields: string[], patch: Record<string, unknown>,
+): Promise<GPerson> {
+  const res = await fetch(`${PEOPLE}/${resourceName}:updateContact?updatePersonFields=${fields.join(",")}`, {
     method: "PATCH",
     headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-    body: JSON.stringify({
-      etag,
-      names: [{ givenName: parts.givenName, middleName: parts.middleName, familyName: parts.familyName }],
-    }),
+    body: JSON.stringify({ etag, ...patch }),
   });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(`Bijwerken mislukt (${res.status}): ${body?.error?.message ?? ""}`);
   return body as GPerson;
+}
+
+async function deleteContact(token: string, resourceName: string): Promise<void> {
+  const res = await fetch(`${PEOPLE}/${resourceName}:deleteContact`, {
+    method: "DELETE",
+    headers: { authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(`Verwijderen mislukt (${res.status}): ${body?.error?.message ?? ""}`);
+  }
+}
+
+const nameOf = (p: GPerson) => joinNameParts(p.names?.[0] ?? {});
+
+/** Hoeveel losse gegevens een contact bevat — gebruikt om de rijkste te behouden. */
+function richness(p: GPerson): number {
+  return (p.phoneNumbers?.length ?? 0) + (p.emailAddresses?.length ?? 0) + (p.addresses?.length ?? 0)
+    + (p.urls?.length ?? 0) + (p.biographies?.length ?? 0) + (p.organizations?.length ?? 0)
+    + (p.birthdays?.length ?? 0);
+}
+
+/** Sleutel waarop we bepalen of twee waarden hetzelfde zijn. */
+function listKey(field: string, entry: Record<string, unknown>): string {
+  const raw = String((field === "addresses" ? entry.formattedValue : entry.value) ?? "").trim();
+  if (field === "phoneNumbers") return normalizePhone(raw) ?? raw.toLowerCase();
+  return raw.toLowerCase();
+}
+
+/**
+ * Trekt de gegevens van de dubbelen in het te behouden contact.
+ *
+ * De import van vorig jaar maakte per schooljaar een apart contact, dus de oude
+ * exemplaren kunnen gegevens bevatten (een tweede nummer, een e-mailadres, een
+ * notitie) die het nieuwste mist. We nemen de vereniging, zodat samenvoegen
+ * nooit informatie kost. Alleen velden die echt wijzigen gaan mee in de patch.
+ */
+function mergeFields(primary: GPerson, others: GPerson[]): { fields: string[]; patch: Record<string, unknown> } {
+  const fields: string[] = [];
+  const patch: Record<string, unknown> = {};
+
+  for (const field of LIST_FIELDS) {
+    const own = (primary[field] ?? []) as Record<string, unknown>[];
+    const seen = new Set(own.map((e) => listKey(field, e)).filter(Boolean));
+    const extra: Record<string, unknown>[] = [];
+    for (const o of others) {
+      for (const e of ((o[field] ?? []) as Record<string, unknown>[])) {
+        const key = listKey(field, e);
+        if (!key || seen.has(key)) continue;
+        seen.add(key);
+        // Zonder metadata overnemen; die hoort bij het contact van herkomst.
+        extra.push(field === "addresses"
+          ? { formattedValue: e.formattedValue, type: e.type }
+          : { value: e.value, type: e.type });
+      }
+    }
+    if (extra.length) {
+      fields.push(field);
+      patch[field] = [...own.map((e) => (field === "addresses"
+        ? { formattedValue: e.formattedValue, type: e.type }
+        : { value: e.value, type: e.type })), ...extra];
+    }
+  }
+
+  // Notities: alle verschillende teksten onder elkaar, zodat er niets verdwijnt.
+  const notes: string[] = [];
+  for (const p of [primary, ...others]) {
+    for (const b of p.biographies ?? []) {
+      const v = (b.value ?? "").trim();
+      if (v && !notes.includes(v)) notes.push(v);
+    }
+  }
+  if (notes.length && notes.join("\n") !== (primary.biographies?.[0]?.value ?? "")) {
+    fields.push("biographies");
+    patch.biographies = [{ value: notes.join("\n"), contentType: "TEXT_PLAIN" }];
+  }
+
+  // Enkelvoudige velden alleen aanvullen als het behouden contact ze mist.
+  if (!primary.organizations?.length) {
+    const from = others.find((o) => o.organizations?.length);
+    if (from) { fields.push("organizations"); patch.organizations = from.organizations; }
+  }
+  if (!primary.birthdays?.length) {
+    const from = others.find((o) => o.birthdays?.length);
+    if (from) { fields.push("birthdays"); patch.birthdays = from.birthdays; }
+  }
+
+  return { fields, patch };
 }
 
 // ---------------------------------------------------------------------------
@@ -223,13 +325,15 @@ async function buildDesired(service: any): Promise<{ desired: Desired[]; noPhone
 
 // ---------------------------------------------------------------------------
 
-type Action = "create" | "update" | "unchanged" | "conflict";
+type Action = "create" | "update" | "unchanged" | "merge" | "conflict";
 interface PlanRow {
   action: Action;
   phone: string;
   from: string | null;
   to: string;
   children: string[];
+  /** Bij samenvoegen: de namen van de contacten die worden opgeruimd. */
+  deletes?: string[];
   resourceName?: string;
   error?: string;
 }
@@ -260,6 +364,9 @@ Deno.serve(async (req: Request) => {
   let body: any = {};
   try { body = await req.json(); } catch { /* lege body = dry-run */ }
   const dryRun = body?.dryRun !== false; // standaard NIET schrijven
+  // Dubbelen samenvoegen tot één contact. De handmatige import maakte per
+  // schooljaar een aparte kaart, dus dit is de normale situatie, niet de fout.
+  const doMerge = body?.merge !== false;
 
   const { data: runRow } = await service.from("google_contact_sync_runs")
     .insert({ dry_run: dryRun, run_by: runBy, run_by_name: runByName })
@@ -288,28 +395,65 @@ Deno.serve(async (req: Request) => {
     }
 
     const plan: PlanRow[] = [];
-    let created = 0, updated = 0, unchanged = 0, conflicts = 0;
+    let created = 0, updated = 0, unchanged = 0, merged = 0, deleted = 0, conflicts = 0;
 
     for (const d of desired) {
-      const matches = byPhone.get(d.phone) ?? [];
+      // Eén contact kan meerdere nummers hebben en dus vaker in de index staan;
+      // op resourceName ontdubbelen voorkomt een vals "dubbel contact".
+      const matches = [...new Map((byPhone.get(d.phone) ?? []).map((p) => [p.resourceName, p])).values()];
+
+      let match: GPerson | undefined = matches[0];
+      let dupes: GPerson[] = [];
 
       if (matches.length > 1) {
-        // Twee contacten met hetzelfde nummer: niet gokken, laten liggen.
-        conflicts++;
-        plan.push({
-          action: "conflict", phone: d.phone, children: d.children,
-          from: matches.map((m) => m.names?.[0]?.displayName ?? "?").join(" / "),
-          to: joinNameParts(applyToNameParts(splitName(d.name), { code: d.code, year: d.year, marker: d.marker })),
-          error: `${matches.length} contacten met dit nummer`,
-        });
-        continue;
+        if (!doMerge) {
+          conflicts++;
+          plan.push({
+            action: "conflict", phone: d.phone, children: d.children,
+            from: matches.map(nameOf).join(" / "),
+            to: joinNameParts(applyToNameParts(splitName(d.name), { code: d.code, year: d.year, marker: d.marker })),
+            error: `${matches.length} contacten met dit nummer`,
+          });
+          continue;
+        }
+        const idx = pickPrimaryIndex(matches.map((p) => ({ name: nameOf(p), richness: richness(p) })));
+        match = matches[idx];
+        dupes = matches.filter((_, i) => i !== idx);
       }
 
-      const match = matches[0];
       const currentParts: Partial<NameParts> = match?.names?.[0] ?? splitName(d.name);
       const nextParts = applyToNameParts(currentParts, { code: d.code, year: d.year, marker: d.marker });
-      const from = match ? joinNameParts(match.names?.[0] ?? {}) : null;
+      const from = match ? nameOf(match) : null;
       const to = joinNameParts(nextParts);
+
+      // ---- Samenvoegen: gegevens optrekken, hernoemen, dubbelen opruimen ----
+      if (match && dupes.length) {
+        merged++;
+        deleted += dupes.length;
+        const row: PlanRow = {
+          action: "merge", phone: d.phone, from, to, children: d.children,
+          deletes: dupes.map(nameOf), resourceName: match.resourceName,
+        };
+        plan.push(row);
+        if (!dryRun) {
+          try {
+            const { fields, patch } = mergeFields(match, dupes);
+            const person = await updatePerson(token, match.resourceName, match.etag ?? "", ["names", ...fields], {
+              ...patch,
+              names: [{ givenName: nextParts.givenName, middleName: nextParts.middleName, familyName: nextParts.familyName }],
+            });
+            // Pas verwijderen als het samenvoegen is gelukt — anders raken we gegevens kwijt.
+            for (const dup of dupes) await deleteContact(token, dup.resourceName);
+            await service.from("google_contacts").upsert({
+              phone_e164: d.phone, resource_name: person.resourceName, etag: person.etag ?? null,
+              display_name: to, synced_at: new Date().toISOString(),
+            });
+          } catch (err) {
+            row.error = err instanceof Error ? err.message : String(err);
+          }
+        }
+        continue;
+      }
 
       if (!match) {
         plan.push({ action: "create", phone: d.phone, from: null, to, children: d.children });
@@ -339,7 +483,9 @@ Deno.serve(async (req: Request) => {
       updated++;
       if (!dryRun) {
         try {
-          const person = await updateNames(token, match.resourceName, match.etag ?? "", nextParts);
+          const person = await updatePerson(token, match.resourceName, match.etag ?? "", ["names"], {
+            names: [{ givenName: nextParts.givenName, middleName: nextParts.middleName, familyName: nextParts.familyName }],
+          });
           await service.from("google_contacts").upsert({
             phone_e164: d.phone, resource_name: person.resourceName, etag: person.etag ?? null,
             display_name: to, synced_at: new Date().toISOString(),
@@ -353,11 +499,14 @@ Deno.serve(async (req: Request) => {
     const failed = plan.filter((r) => r.error && r.action !== "conflict").length;
     const result = {
       ok: true, dryRun, runId,
-      counts: { created, updated, unchanged, conflicts, skipped: noPhone.length, failed, total: desired.length },
+      counts: {
+        created, updated, unchanged, merged, deleted, conflicts,
+        skipped: noPhone.length, failed, total: desired.length,
+      },
       noPhone,
       plan,
     };
-    await finish({ ok: true, created, updated, unchanged, conflicts, skipped: noPhone.length, plan });
+    await finish({ ok: true, created, updated, unchanged, merged, deleted, conflicts, skipped: noPhone.length, plan });
     return json(result);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

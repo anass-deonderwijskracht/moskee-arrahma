@@ -150,6 +150,35 @@ export function applyContactName(
   return buildContactName(base, opts.code, opts.year, opts.marker);
 }
 
+export interface PrimaryCandidate {
+  /** Weergavenaam, waaruit we het jaartal van het achtervoegsel lezen. */
+  name: string;
+  /** Hoeveel velden er gevuld zijn (e-mail, adres, notitie, …). */
+  richness: number;
+}
+
+/**
+ * Welk van meerdere contacten met hetzelfde nummer we behouden bij samenvoegen.
+ *
+ * De handmatige import maakte per schooljaar een apart contact, dus dezelfde
+ * ouder staat er als AO-23, AO-24 én AO-25 in. We houden het **nieuwste** jaar
+ * aan; bij gelijkspel (of als geen enkel contact een jaartal heeft) het contact
+ * met de meeste ingevulde velden, zodat we zo min mogelijk gegevens kwijtraken.
+ * Blijft het gelijk, dan wint de eerste — de volgorde die Google teruggeeft.
+ */
+export function pickPrimaryIndex(candidates: PrimaryCandidate[]): number {
+  let best = 0;
+  let bestYear = parseContactName(candidates[0]?.name ?? "").year ?? -1;
+  for (let i = 1; i < candidates.length; i++) {
+    const year = parseContactName(candidates[i].name).year ?? -1;
+    if (year > bestYear || (year === bestYear && candidates[i].richness > candidates[best].richness)) {
+      best = i;
+      bestYear = year;
+    }
+  }
+  return best;
+}
+
 export interface NameParts { givenName: string; middleName: string; familyName: string; }
 
 /** Haalt een achtervoegsel uit één losse naamcomponent. */

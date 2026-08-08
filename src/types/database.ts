@@ -86,6 +86,7 @@ export interface Database {
         Row: {
           id: string; started_at: string; finished_at: string | null; dry_run: boolean; ok: boolean;
           created: number; updated: number; unchanged: number; skipped: number; conflicts: number;
+          merged: number; deleted: number;
           error: string | null; plan: unknown; run_by: string | null; run_by_name: string | null;
         };
         Insert: Partial<Database["public"]["Tables"]["google_contact_sync_runs"]["Row"]>;

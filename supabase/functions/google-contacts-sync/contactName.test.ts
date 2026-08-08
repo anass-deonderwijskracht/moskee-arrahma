@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   applyContactName, buildContactName, parseContactName, normalizePhone,
   statusMarker, bestMarker, yearSuffix, applyToNameParts, joinNameParts,
-  trackCode, bestCode, CODE_REGULIER, CODE_HIFDH,
+  trackCode, bestCode, pickPrimaryIndex, CODE_REGULIER, CODE_HIFDH,
   MARKER_OK, MARKER_PENDING, MARKER_REJECTED,
 } from "./contactName";
 
@@ -161,6 +161,35 @@ describe("applyToNameParts", () => {
   it("levert dezelfde weergavenaam op als de losse variant", () => {
     const parts = applyToNameParts({ givenName: "Mohamed", familyName: "Belbachir" }, opts);
     expect(joinNameParts(parts)).toBe(applyContactName("Mohamed Belbachir", opts));
+  });
+});
+
+describe("pickPrimaryIndex", () => {
+  const c = (name: string, richness = 0) => ({ name, richness });
+
+  it("houdt het contact van het nieuwste schooljaar aan", () => {
+    const list = [c("Oumaima Hassani AO-23"), c("Oumaima Hassani AO-25"), c("Oumaima Hassani AO-24")];
+    expect(pickPrimaryIndex(list)).toBe(1);
+  });
+
+  it("kijkt bij gelijk jaartal naar het rijkst gevulde contact", () => {
+    expect(pickPrimaryIndex([c("Ahmed Mobarak AO-25", 1), c("Ahmed Mobarak AO-25", 4)])).toBe(1);
+  });
+
+  it("valt zonder jaartallen terug op het rijkst gevulde contact", () => {
+    expect(pickPrimaryIndex([c("Ghizlane", 0), c("Ghizlane", 3), c("Ghizlane", 1)])).toBe(1);
+  });
+
+  it("laat een contact mét jaartal winnen van eentje zonder, ook als die voller is", () => {
+    expect(pickPrimaryIndex([c("Hamza Belhadj", 9), c("Hamza Belhadj AO-24", 1)])).toBe(1);
+  });
+
+  it("kiest bij volledig gelijkspel de eerste", () => {
+    expect(pickPrimaryIndex([c("Adam Jamai AO-25", 2), c("Adam Jamai AO-25", 2)])).toBe(0);
+  });
+
+  it("werkt met één kandidaat", () => {
+    expect(pickPrimaryIndex([c("Faiza Mehdaoui AO-25")])).toBe(0);
   });
 });
 

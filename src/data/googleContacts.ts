@@ -4,7 +4,7 @@ import type { Tables } from "@/types/database";
 
 export type SyncRun = Tables<"google_contact_sync_runs">;
 
-export type SyncAction = "create" | "update" | "unchanged" | "conflict";
+export type SyncAction = "create" | "update" | "unchanged" | "merge" | "conflict";
 
 export interface SyncPlanRow {
   action: SyncAction;
@@ -13,12 +13,18 @@ export interface SyncPlanRow {
   from: string | null;
   to: string;
   children: string[];
+  /** Bij samenvoegen: de contacten die worden opgeruimd. */
+  deletes?: string[];
   resourceName?: string;
   error?: string;
 }
 
 export interface SyncCounts {
   created: number; updated: number; unchanged: number;
+  /** Gezinnen waarvan meerdere contacten tot één zijn teruggebracht. */
+  merged: number;
+  /** Dubbele contacten die daarbij zijn verwijderd. */
+  deleted: number;
   conflicts: number; skipped: number; failed: number; total: number;
 }
 
@@ -39,8 +45,8 @@ export interface SyncResult {
 export function useContactSync() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ dryRun = true }: { dryRun?: boolean } = {}): Promise<SyncResult> => {
-      const { data, error } = await supabase.functions.invoke("google-contacts-sync", { body: { dryRun } });
+    mutationFn: async ({ dryRun = true, merge = true }: { dryRun?: boolean; merge?: boolean } = {}): Promise<SyncResult> => {
+      const { data, error } = await supabase.functions.invoke("google-contacts-sync", { body: { dryRun, merge } });
       if (error) {
         // De function stuurt haar eigen Nederlandse melding mee in de body.
         const ctx = (error as { context?: Response }).context;
