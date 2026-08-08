@@ -6,7 +6,18 @@ import { useSession } from "@/features/auth/AuthProvider";
 
 type NavItem = { group?: string; id?: string; to?: string; label?: string; icon?: IconName; countKey?: string };
 
-export function Sidebar({ collapsed, setCollapsed }: { collapsed: boolean; setCollapsed: (v: boolean) => void }) {
+type SidebarProps = {
+  /** True zodra de balk zwevend getoond wordt: de knop zet hem dan juist vast. */
+  collapsed: boolean;
+  /** Inklappen op desktop, lade sluiten op mobiel. */
+  onToggle: () => void;
+  mobile: boolean;
+  /** Houdt het zwevende paneel open zolang de muis erop staat. */
+  onMouseEnter?: () => void;
+  onMouseLeave?: () => void;
+};
+
+export function Sidebar({ collapsed, onToggle, mobile, onMouseEnter, onMouseLeave }: SidebarProps) {
   const { data: counts } = useNavCounts();
   const { data: settings } = useAppSettings();
   const { fullName, signOut, isDocent, classId } = useSession();
@@ -40,15 +51,22 @@ export function Sidebar({ collapsed, setCollapsed }: { collapsed: boolean; setCo
 
   const initials = (fullName || "Beheer").split(" ").map((n) => n[0]).slice(0, 2).join("").toUpperCase();
 
+  const toggleLabel = mobile
+    ? "Menu sluiten"
+    : collapsed
+      ? "Zijbalk vastzetten"
+      : "Zijbalk inklappen";
+
   return (
-    <aside className="sidebar">
+    <aside className="sidebar" onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave}>
       <div className="sidebar-brand">
-        {!collapsed && (
-          <div>
-            <div className="name">Moskee Arrahma</div>
-            <div className="sub">Weekendonderwijs{settings?.city ? ` · ${settings.city}` : ""}</div>
-          </div>
-        )}
+        <button className="sidebar-toggle" onClick={onToggle} title={toggleLabel} aria-label={toggleLabel}>
+          <Icon name={mobile ? "x" : "panelLeft"} size={16} />
+        </button>
+        <div>
+          <div className="name">Moskee Arrahma</div>
+          <div className="sub">Weekendonderwijs{settings?.city ? ` · ${settings.city}` : ""}</div>
+        </div>
       </div>
       <nav className="sidebar-nav">
         {items.map((item, i) =>
@@ -59,7 +77,6 @@ export function Sidebar({ collapsed, setCollapsed }: { collapsed: boolean; setCo
               key={item.to}
               to={item.to!}
               className={({ isActive }) => "sidebar-link " + (isActive ? "active" : "")}
-              title={collapsed ? item.label : undefined}
             >
               <span className="icon"><Icon name={item.icon!} size={16} /></span>
               <span>{item.label}</span>
@@ -72,35 +89,14 @@ export function Sidebar({ collapsed, setCollapsed }: { collapsed: boolean; setCo
       </nav>
       <div className="sidebar-foot">
         <button className="avatar" title={fullName ?? undefined}>{initials}</button>
-        {!collapsed && (
-          <div className="who">
-            <span className="nm">{fullName ?? "Beheerder"}</span>
-            <span className="rl">{isDocent ? "Docent" : "Bestuur · Beheerder"}</span>
-          </div>
-        )}
+        <div className="who">
+          <span className="nm">{fullName ?? "Beheerder"}</span>
+          <span className="rl">{isDocent ? "Docent" : "Bestuur · Beheerder"}</span>
+        </div>
         <button className="btn ghost sm" onClick={() => { void signOut(); }} title="Uitloggen" style={{ padding: 4 }}>
           <Icon name="logout" size={14} />
         </button>
-        {!collapsed && (
-          <button className="btn ghost sm" onClick={() => setCollapsed(true)} title="Inklappen" style={{ padding: 4 }}>
-            <Icon name="panelLeft" size={14} />
-          </button>
-        )}
       </div>
-      {collapsed && (
-        <button
-          onClick={() => setCollapsed(false)}
-          title="Uitklappen"
-          style={{
-            position: "absolute", bottom: 64, right: -12, width: 24, height: 24,
-            background: "var(--bg-elev)", border: "1px solid var(--border)",
-            borderRadius: 999, display: "grid", placeItems: "center",
-            boxShadow: "var(--shadow-sm)", color: "var(--fg-muted)", zIndex: 10,
-          }}
-        >
-          <Icon name="chevronRight" size={12} />
-        </button>
-      )}
     </aside>
   );
 }

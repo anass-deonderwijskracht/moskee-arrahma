@@ -106,11 +106,17 @@ zijn. Het endpoint is publiek maar afgeschermd met het gedeelde secret.
 
 ## Google Contacts-synchronisatie
 
-Oudercontacten worden bijgehouden in Google Contacts met een naam die het
-schooljaar en de inschrijfstatus toont: **`Mohamed Belbachir AO-26 ✅`**
-(⏳ = wachtlijst/intake, ❌ = afgewezen). Het jaartal is het startjaar van het
-schooljaar en loopt mee: schrijft een gezin zich opnieuw in, dan wordt AO-25 →
-AO-26; doet het niet mee, dan blijft het op het oude jaar staan.
+Oudercontacten worden bijgehouden in Google Contacts met een naam die de klassen
+van de kinderen, het schooljaar en de inschrijfstatus toont:
+**`Ahmed Ouahabi Klas 1-2-3 AO-26 ✅`** (⏳ = wachtlijst/intake, ❌ = afgewezen).
+Het jaartal is het startjaar van het schooljaar en loopt mee: schrijft een gezin
+zich opnieuw in, dan wordt AO-25 → AO-26; doet het niet mee, dan blijft het op
+het oude jaar staan.
+
+Het **klaslabel** vat alle kinderen van dat gezin samen: dezelfde klas telt één
+keer, cijfers lopen van klein naar groot (2 vóór 10, dus niet alfabetisch) en
+hifdh-klassen komen daarachter. Vier kinderen in de klassen 1, 1, 2 en 3 geven
+dus `Klas 1-2-3`. Is er nog geen klas ingedeeld, dan blijft het label weg.
 
 De code is **AO** (Arabisch onderwijs) of **HF** (hifdh). Omdat het contact de
 ouder is en een gezin kinderen in beide trajecten kan hebben, wint HF. Alleen
@@ -146,7 +152,7 @@ Uit te zetten met de schakelaar *Dubbele contacten samenvoegen*; dan worden zulk
 nummers overgeslagen en als conflict gemeld.
 
 De naamlogica staat los in [`contactName.ts`](supabase/functions/google-contacts-sync/contactName.ts)
-en is gedekt door 43 tests — dit is het stuk dat bij een fout honderden
+en is gedekt door 53 tests — dit is het stuk dat bij een fout honderden
 contacten tegelijk zou verminken.
 
 **Draaien**: Instellingen → Google Contacts. Eerst *Controleren* (dry-run,

@@ -1,15 +1,15 @@
 // ============================================================================
 // Naamconventie voor Google Contacts.
 //
-// Een oudercontact heet "<naam> <CODE>-<JJ> <markering>", bijvoorbeeld
-// "Mohamed Belbachir AO-26 ✅". Het jaartal is het startjaar van het schooljaar
+// Een oudercontact heet "<naam> [Klas x-y] <CODE>-<JJ> <markering>", bijvoorbeeld
+// "Ahmed Ouahabi Klas 1-2-3 AO-26 ✅". Het jaartal is het startjaar van het schooljaar
 // waarvoor het kind staat ingeschreven en loopt dus mee: schrijft een gezin zich
 // opnieuw in voor 2026/27, dan wordt AO-25 → AO-26. Doet een gezin niet mee, dan
 // blijft het op het oude jaar staan — precies het signaal dat je wilt zien.
 //
-// We "bezitten" alleen het achtervoegsel, nooit de hele naam: bij het bijwerken
-// strippen we een bestaand achtervoegsel en plakken het nieuwe erachter, zodat
-// handmatige naamcorrecties in Google blijven staan.
+// De naam komt uit onze database; hier wordt alleen het achtervoegsel opgebouwd
+// en een bestaand achtervoegsel eraf gestript — ook als dat in Google een eigen
+// naamcomponent is — zodat klassen en jaartallen nooit stapelen.
 //
 // Geen Deno-specifieke code hier: index.ts importeert dit bestand en vitest test
 // het rechtstreeks. Het staat bewust ín de function-map en niet in een gedeelde
@@ -72,6 +72,30 @@ export function bestCode(tracks: string[]): string {
   return tracks.some((t) => trackCode(t) === CODE_HIFDH) ? CODE_HIFDH : CODE_REGULIER;
 }
 
+/**
+ * De klassen van een gezin als één label: ["Klas 1","Klas 1","Klas 2","Klas 3"]
+ * → "Klas 1-2-3". Dubbele klassen tellen één keer, cijfers lopen van klein naar
+ * groot (2 vóór 10, dus niet alfabetisch) en niet-numerieke klassen — hifdh —
+ * komen daarachter. Null als er geen klas bekend is; dan blijft het label weg.
+ */
+export function classLabel(codes: (string | null | undefined)[]): string | null {
+  const parts = [...new Set(
+    codes
+      .map((c) => (c ?? "").trim().replace(/^klas\s+/i, "").trim())
+      .filter(Boolean),
+  )];
+  if (!parts.length) return null;
+
+  parts.sort((a, b) => {
+    const na = Number(a), nb = Number(b);
+    const aNum = Number.isFinite(na), bNum = Number.isFinite(nb);
+    if (aNum && bNum) return na - nb;
+    if (aNum !== bNum) return aNum ? -1 : 1;   // cijfers eerst, dan hifdh e.d.
+    return a.localeCompare(b, "nl");
+  });
+  return "Klas " + parts.join("-");
+}
+
 /** "y2026" of "2026/27" of 2026 → 26 (tweecijferig startjaar). */
 export function yearSuffix(schooljaar: string | number): number | null {
   const m = String(schooljaar).match(/(\d{4})/);
@@ -94,6 +118,8 @@ const VS16 = "️";
 // vorig jaar zette bij sommige contacten familyName = "AO-25". Vandaar `^|\s`.
 // Vier cijfers ("AO-2025") accepteren we ook; we houden de laatste twee aan.
 const CODE_RE = /(?:^|\s)([A-Za-z]{2,4})-(\d{4}|\d{2})$/;
+// "Klas 1", "Klas 1-2-3", "Klas Hifdh-K" — staat vóór de code in het achtervoegsel.
+const CLASS_RE = /(?:^|\s)Klas\s+[\p{L}\d]+(?:-[\p{L}\d]+)*$/iu;
 
 /**
  * Haalt het achtervoegsel van een bestaande contactnaam af. Strip herhaaldelijk
@@ -129,17 +155,31 @@ export function parseContactName(display: string): ParsedName {
       rest = rest.slice(0, m.index).trimEnd();
       continue;
     }
+
+    // Het klaslabel alleen weghalen als we al iets van óns achtervoegsel zagen;
+    // anders zouden we een naam die toevallig op "Klas …" eindigt aantasten.
+    if (code !== null || marker !== null) {
+      const cm = rest.match(CLASS_RE);
+      if (cm) { rest = rest.slice(0, cm.index).trimEnd(); continue; }
+    }
     break;
   }
 
   return { base: rest, code, year, marker };
 }
 
+/** Het achtervoegsel zelf: "[Klas 1-2-3 ]AO-26 ✅". */
+function suffixOf(opts: { code: string; year: number; marker: Marker; klas?: string | null }): string {
+  const yy = String(((opts.year % 100) + 100) % 100).padStart(2, "0");
+  return `${opts.klas ? opts.klas + " " : ""}${opts.code.toUpperCase()}-${yy} ${opts.marker}`;
+}
+
 /** Plakt het achtervoegsel achter een schone naam. */
-export function buildContactName(base: string, code: string, year: number, marker: Marker): string {
+export function buildContactName(
+  base: string, code: string, year: number, marker: Marker, klas?: string | null,
+): string {
   const clean = (base ?? "").replace(/\s+/g, " ").trim();
-  const yy = String(((year % 100) + 100) % 100).padStart(2, "0");
-  return `${clean} ${code.toUpperCase()}-${yy} ${marker}`.trim();
+  return `${clean} ${suffixOf({ code, year, marker, klas })}`.trim();
 }
 
 /**
@@ -147,10 +187,10 @@ export function buildContactName(base: string, code: string, year: number, marke
  * Idempotent — twee keer toepassen geeft hetzelfde resultaat.
  */
 export function applyContactName(
-  currentDisplay: string, opts: { code: string; year: number; marker: Marker },
+  currentDisplay: string, opts: { code: string; year: number; marker: Marker; klas?: string | null },
 ): string {
   const { base } = parseContactName(currentDisplay);
-  return buildContactName(base, opts.code, opts.year, opts.marker);
+  return buildContactName(base, opts.code, opts.year, opts.marker, opts.klas);
 }
 
 export interface PrimaryCandidate {
@@ -204,7 +244,7 @@ function stripPart(part: string): string {
  */
 export function applyToNameParts(
   parts: Partial<NameParts>,
-  opts: { code: string; year: number; marker: Marker },
+  opts: { code: string; year: number; marker: Marker; klas?: string | null },
   fallback?: Partial<NameParts>,
 ): NameParts {
   let given = stripPart(parts.givenName ?? "");
@@ -217,8 +257,7 @@ export function applyToNameParts(
     family = stripPart(fallback.familyName ?? "");
   }
 
-  const yy = String(((opts.year % 100) + 100) % 100).padStart(2, "0");
-  const suffix = `${opts.code.toUpperCase()}-${yy} ${opts.marker}`;
+  const suffix = suffixOf(opts);
 
   if (family) return { givenName: given, middleName: middle, familyName: `${family} ${suffix}` };
   if (middle) return { givenName: given, middleName: `${middle} ${suffix}`, familyName: "" };

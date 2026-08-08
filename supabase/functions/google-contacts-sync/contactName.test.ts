@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   applyContactName, buildContactName, parseContactName, normalizePhone,
   statusMarker, bestMarker, yearSuffix, applyToNameParts, joinNameParts,
-  trackCode, bestCode, pickPrimaryIndex, CODE_REGULIER, CODE_HIFDH,
+  trackCode, bestCode, pickPrimaryIndex, classLabel, CODE_REGULIER, CODE_HIFDH,
   MARKER_OK, MARKER_PENDING, MARKER_REJECTED,
 } from "./contactName";
 
@@ -39,6 +39,30 @@ describe("trackCode / bestCode", () => {
     expect(bestCode(["regulier", "hifdh"])).toBe(CODE_HIFDH);
     expect(bestCode(["regulier", "regulier"])).toBe(CODE_REGULIER);
     expect(bestCode([])).toBe(CODE_REGULIER);
+  });
+});
+
+describe("classLabel", () => {
+  it("vat vier kinderen in de klassen 1, 1, 2 en 3 samen", () => {
+    expect(classLabel(["Klas 1", "Klas 1", "Klas 2", "Klas 3"])).toBe("Klas 1-2-3");
+  });
+
+  it("sorteert van klein naar groot, niet alfabetisch", () => {
+    expect(classLabel(["Klas 10", "Klas 2"])).toBe("Klas 2-10");
+    expect(classLabel(["Klas 3", "Klas 1"])).toBe("Klas 1-3");
+  });
+
+  it("zet hifdh-klassen achter de genummerde", () => {
+    expect(classLabel(["Klas Hifdh-K", "Klas 1"])).toBe("Klas 1-Hifdh-K");
+  });
+
+  it("geeft null als er nog geen klas bekend is", () => {
+    expect(classLabel([])).toBeNull();
+    expect(classLabel([null, undefined, "  "])).toBeNull();
+  });
+
+  it("negeert kinderen zonder klas naast kinderen mét klas", () => {
+    expect(classLabel(["Klas 2", null, "Klas 2"])).toBe("Klas 2");
   });
 });
 
@@ -186,6 +210,34 @@ describe("applyToNameParts", () => {
       opts,
       { givenName: "Oumaima", familyName: "Hassani" },
     ))).toBe("Oumaima Hassani AO-26 ✅");
+  });
+
+  it("zet het klaslabel tussen de naam en de code", () => {
+    expect(joinNameParts(applyToNameParts({ givenName: "Ahmed", familyName: "Ouahabi" },
+      { code: "AO", year: 26, marker: MARKER_OK, klas: "Klas 1-2-3" })))
+      .toBe("Ahmed Ouahabi Klas 1-2-3 AO-26 ✅");
+  });
+
+  it("vervangt een oud klaslabel in plaats van het te stapelen", () => {
+    expect(joinNameParts(applyToNameParts({ givenName: "Ahmed", familyName: "Ouahabi Klas 1-2 AO-25 ⏳" },
+      { code: "AO", year: 26, marker: MARKER_OK, klas: "Klas 1-2-3" })))
+      .toBe("Ahmed Ouahabi Klas 1-2-3 AO-26 ✅");
+  });
+
+  it("laat het klaslabel weg als er nog geen klas is", () => {
+    expect(joinNameParts(applyToNameParts({ givenName: "Ahmed", familyName: "Ouahabi Klas 1 AO-25 ✅" },
+      { code: "AO", year: 26, marker: MARKER_PENDING, klas: null })))
+      .toBe("Ahmed Ouahabi AO-26 ⏳");
+  });
+
+  it("is idempotent mét klaslabel", () => {
+    const opts2 = { code: "AO", year: 26, marker: MARKER_OK, klas: "Klas 1-Hifdh-K" } as const;
+    const once = applyToNameParts({ givenName: "Ahmed", familyName: "Ouahabi" }, opts2);
+    expect(applyToNameParts(once, opts2)).toEqual(once);
+  });
+
+  it("laat een naam die zelf op 'Klas …' eindigt met rust zonder achtervoegsel", () => {
+    expect(parseContactName("Meester van der Klas 1").base).toBe("Meester van der Klas 1");
   });
 
   it("is idempotent over de losse componenten", () => {

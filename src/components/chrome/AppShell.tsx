@@ -1,4 +1,4 @@
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { Outlet, NavLink, useLocation } from "react-router-dom";
 import { Icon } from "@/components/ui";
 import { Loading } from "@/features/_shared/states";
@@ -53,21 +53,78 @@ function TopNavRow() {
   );
 }
 
+/** Korte vertraging voorkomt dat de balk uitschiet bij een toevallige muisveeg. */
+const PEEK_OPEN_DELAY = 120;
+/** En dat hij dichtklapt bij het kleine gaatje tussen strook en paneel. */
+const PEEK_CLOSE_DELAY = 220;
+
 export function AppShell() {
   const { tweaks, set } = useTweaks();
   const [collapsed, setCollapsed] = useState(false);
+  const [peeking, setPeeking] = useState(false);
   const isMobile = useIsMobile();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const location = useLocation();
 
-  // Close the mobile drawer whenever the route changes.
-  useEffect(() => { setMobileNavOpen(false); }, [location.pathname]);
+  const peekTimer = useRef<number | undefined>(undefined);
+  const schedulePeek = useCallback((open: boolean) => {
+    window.clearTimeout(peekTimer.current);
+    peekTimer.current = window.setTimeout(
+      () => setPeeking(open),
+      open ? PEEK_OPEN_DELAY : PEEK_CLOSE_DELAY,
+    );
+  }, []);
+  useEffect(() => () => window.clearTimeout(peekTimer.current), []);
+
+  // Close the mobile drawer whenever the route changes; een klik op een menu-item
+  // laat ook het zwevende paneel meteen weer verdwijnen.
+  useEffect(() => {
+    setMobileNavOpen(false);
+    window.clearTimeout(peekTimer.current);
+    setPeeking(false);
+  }, [location.pathname]);
 
   const showSidebar = tweaks.navigation === "sidebar";
+  // Op mobiel stuurt de lade de zijbalk aan; inklappen geldt alleen op desktop.
+  const sidebarCollapsed = showSidebar && !isMobile && collapsed;
+  const peekOpen = sidebarCollapsed && peeking;
+
+  const dock = () => {
+    window.clearTimeout(peekTimer.current);
+    setPeeking(false);
+    setCollapsed(false);
+  };
 
   return (
-    <div className="app" data-collapsed={collapsed} data-nav={tweaks.navigation} data-mobilenav={mobileNavOpen ? "open" : "closed"}>
-      {showSidebar && <Sidebar collapsed={isMobile ? false : collapsed} setCollapsed={setCollapsed} />}
+    <div
+      className="app"
+      data-collapsed={sidebarCollapsed}
+      data-nav={tweaks.navigation}
+      data-mobilenav={mobileNavOpen ? "open" : "closed"}
+      data-peek={peekOpen ? "open" : "closed"}
+    >
+      {showSidebar && (
+        <Sidebar
+          collapsed={sidebarCollapsed}
+          mobile={isMobile}
+          onToggle={isMobile ? () => setMobileNavOpen(false) : sidebarCollapsed ? dock : () => setCollapsed(true)}
+          onMouseEnter={sidebarCollapsed ? () => schedulePeek(true) : undefined}
+          onMouseLeave={sidebarCollapsed ? () => schedulePeek(false) : undefined}
+        />
+      )}
+      {sidebarCollapsed && (
+        <>
+          <div
+            className="sidebar-hotzone"
+            aria-hidden="true"
+            onMouseEnter={() => schedulePeek(true)}
+            onMouseLeave={() => schedulePeek(false)}
+          />
+          <button className="sidebar-reveal" onClick={dock} title="Zijbalk uitklappen" aria-label="Zijbalk uitklappen">
+            <Icon name="panelLeft" size={16} />
+          </button>
+        </>
+      )}
       {mobileNavOpen && <div className="nav-backdrop" onClick={() => setMobileNavOpen(false)} />}
       <div className="main">
         <div className="mobile-bar">

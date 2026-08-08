@@ -54,7 +54,7 @@ export function GoogleContactsSettings() {
     <div className="flex-col gap-4">
       <Card
         title={<><Icon name="phone" size={14} /> Google Contacts</>}
-        sub="Oudercontacten krijgen de naam “Voornaam Achternaam AO-26 ✅” (HF voor hifdh), waarbij het jaartal het schooljaar is en de markering de inschrijfstatus."
+        sub="Oudercontacten krijgen de naam “Ahmed Ouahabi Klas 1-2-3 AO-26 ✅” — de klassen van de kinderen, het schooljaar (HF voor hifdh) en de inschrijfstatus."
         action={
           <div className="flex gap-2">
             <Btn icon="eye" disabled={sync.isPending} onClick={() => run(true)}>
@@ -68,8 +68,9 @@ export function GoogleContactsSettings() {
       >
         <div className="text-sm text-subtle">
           <b>Controleren</b> vergelijkt de database met Google en laat zien wat er zou veranderen, zonder iets te schrijven.
-          Pas <b>Doorvoeren</b> past de contacten daadwerkelijk aan. De naam komt uit de inschrijving hier in de app,
-          met het schooljaar en de status erachter — een naam die in Google is aangepast wordt dus overschreven.
+          Pas <b>Doorvoeren</b> past de contacten daadwerkelijk aan. De naam komt uit het tabblad <b>Ouders</b>
+          (of uit de aanmelding zolang een gezin nog niet definitief is), met de klassen, het schooljaar en de
+          status erachter — een naam die in Google is aangepast wordt dus overschreven.
         </div>
         <div className="flex items-center gap-3 mt-3" style={{ flexWrap: "wrap" }}>
           <Toggle checked={merge} onChange={setMerge} label="Dubbele contacten samenvoegen"

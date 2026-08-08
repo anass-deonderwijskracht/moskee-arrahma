@@ -2,7 +2,7 @@
 //
 // Zet de oudercontacten van Moskee Arrahma in Google Contacts, met een naam die
 // het lopende schooljaar en de inschrijfstatus toont:
-//   "Mohamed Belbachir AO-26 ✅"
+//   "Ahmed Ouahabi Klas 1-2-3 AO-26 ✅"
 //
 // Werkwijze: volledige reconciliatie, geen wachtrij. Elke run vergelijkt de
 // gewenste situatie (uit de database) met wat er in Google staat en doet het
@@ -37,7 +37,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
   applyToNameParts, joinNameParts, normalizePhone, bestMarker, bestCode, yearSuffix, pickPrimaryIndex,
-  type Marker, type NameParts,
+  classLabel, type Marker, type NameParts,
 } from "./contactName.ts";
 
 const cors = {
@@ -238,6 +238,8 @@ interface Desired {
   year: number;
   /** AO of HF — hifdh wint als een gezin kinderen in beide trajecten heeft. */
   code: string;
+  /** "Klas 1-2-3" over alle kinderen van dit gezin; null als er nog geen klas is. */
+  klas: string | null;
   marker: Marker;
   children: string[];
 }
@@ -255,10 +257,14 @@ async function buildDesired(service: any): Promise<{ desired: Desired[]; noPhone
     await Promise.all([
       service.from("enrollments").select("id, child_name, status, track"),
       service.from("enrollment_parents").select("enrollment_id, name, phone, email, is_primary"),
-      service.from("enrollment_placements").select("enrollment_id, schooljaar_id"),
+      service.from("enrollment_placements").select("enrollment_id, schooljaar_id, class_id"),
       service.from("schooljaren").select("id, code, is_current, archived"),
       service.from("ouders").select("name, phone, email, primary"),
     ]);
+  const { data: classRows } = await service.from("classes").select("id, code");
+  const classCode = new Map<string, string>();
+  // deno-lint-ignore no-explicit-any
+  for (const c of ((classRows ?? []) as any[])) classCode.set(c.id, c.code);
 
   // Het tabblad Ouders bewerkt `ouders`; `enrollment_parents` is de momentopname
   // bij aanmelding en verandert niet meer als je later de naam corrigeert.
@@ -291,10 +297,13 @@ async function buildDesired(service: any): Promise<{ desired: Desired[]; noPhone
   const intakeYear = next ? (yearSuffix(next.code) ?? 0) : 0;
 
   const placementYear = new Map<string, number>();
+  const placementClass = new Map<string, string>();
   // deno-lint-ignore no-explicit-any
   for (const p of ((placements ?? []) as any[])) {
     const y = yearById.get(p.schooljaar_id);
     if (y != null) placementYear.set(p.enrollment_id, y);
+    const code = p.class_id ? classCode.get(p.class_id) : null;
+    if (code) placementClass.set(p.enrollment_id, code);
   }
 
   // deno-lint-ignore no-explicit-any
@@ -302,7 +311,7 @@ async function buildDesired(service: any): Promise<{ desired: Desired[]; noPhone
   // deno-lint-ignore no-explicit-any
   for (const e of ((enrollments ?? []) as any[])) enrollById.set(e.id, e);
 
-  interface Acc { phone: string; names: string[]; emails: string[]; rows: { year: number; status: string; track: string; child: string }[] }
+  interface Acc { phone: string; names: string[]; emails: string[]; rows: { year: number; status: string; track: string; klas: string | null; child: string }[] }
   const byPhone = new Map<string, Acc>();
   const noPhone: string[] = [];
 
@@ -320,6 +329,7 @@ async function buildDesired(service: any): Promise<{ desired: Desired[]; noPhone
       year: placementYear.get(e.id) ?? intakeYear,
       status: e.status,
       track: e.track,
+      klas: placementClass.get(e.id) ?? null,
       child: e.child_name,
     });
   }
@@ -338,6 +348,7 @@ async function buildDesired(service: any): Promise<{ desired: Desired[]; noPhone
       email: ouder?.email ?? acc.emails[0] ?? null,
       year,
       code: bestCode(currentRows.map((r) => r.track)),
+      klas: classLabel(currentRows.map((r) => r.klas)),
       marker: bestMarker(currentRows.map((r) => r.status)),
       children: [...new Set(acc.rows.map((r) => r.child))],
     });
@@ -434,7 +445,7 @@ Deno.serve(async (req: Request) => {
           plan.push({
             action: "conflict", phone: d.phone, children: d.children,
             from: matches.map(nameOf).join(" / "),
-            to: joinNameParts(applyToNameParts(splitName(d.name), { code: d.code, year: d.year, marker: d.marker })),
+            to: joinNameParts(applyToNameParts(splitName(d.name), { code: d.code, year: d.year, marker: d.marker, klas: d.klas })),
             error: `${matches.length} contacten met dit nummer`,
           });
           continue;
@@ -447,7 +458,7 @@ Deno.serve(async (req: Request) => {
       // De naam komt uit ONS systeem, niet uit Google: de inschrijving is de bron
       // van waarheid. Een eventueel oud achtervoegsel wordt eraf gestript, dus
       // "Oumaima Hassani" + AO-26 ✅ — nooit een stapeling van oude jaren.
-      const nextParts = applyToNameParts(splitName(d.name), { code: d.code, year: d.year, marker: d.marker });
+      const nextParts = applyToNameParts(splitName(d.name), { code: d.code, year: d.year, marker: d.marker, klas: d.klas });
       const from = match ? nameOf(match) : null;
       const to = joinNameParts(nextParts);
 
