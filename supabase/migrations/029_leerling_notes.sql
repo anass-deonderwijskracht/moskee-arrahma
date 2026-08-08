@@ -29,14 +29,7 @@ alter table public.lesson_notes add constraint lesson_notes_scope_check
 -- ---- RLS: docenten mogen ook notities bij hun eigen leerlingen -------------
 -- De bestaande policy toetste alleen op de les. Bij een notitie zonder les
 -- levert dat NULL op en zou een docent zijn eigen notitie niet terugzien.
-create or replace function public.leerling_in_my_class(p_leerling uuid)
-returns boolean language sql stable security definer set search_path = public as $$
-  select exists (
-    select 1 from public.leerlingen l
-    where l.id = p_leerling and l.class_id = public.current_class_id()
-  );
-$$;
-
+-- leerling_in_my_class() bestaat al sinds 014 en wordt hier hergebruikt.
 drop policy if exists docent_lesson_notes_all on public.lesson_notes;
 create policy docent_lesson_notes_all on public.lesson_notes
   for all
