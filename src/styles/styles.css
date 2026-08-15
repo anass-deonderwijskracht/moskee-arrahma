@@ -449,6 +449,11 @@ a { color: inherit; text-decoration: none; }
 .table tbody tr.selected { background: var(--primary-soft); }
 .table .num { font-variant-numeric: tabular-nums; font-family: var(--mono); font-size: 12px; }
 
+/* Brede tabellen schuiven binnen de kaart in plaats van de pagina te verbreden.
+   Let op: de kaartinhoud wordt hiermee de scroll-container, dus een sticky
+   tabelkop plakt daaraan vast en niet meer aan de pagina. */
+.card.scroll-x > .card-body { overflow-x: auto; }
+
 /* === Stat tiles === */
 .stat-grid {
   display: grid;

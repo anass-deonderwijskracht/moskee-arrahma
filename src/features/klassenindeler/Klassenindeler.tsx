@@ -3,7 +3,7 @@ import { Card, Btn, Icon, Badge, Select, Pills, type Option, type BadgeKind } fr
 import { Loading } from "@/features/_shared/states";
 import { useToast } from "@/components/chrome/Toast";
 import { useSchooljaren } from "@/data/schooljaren";
-import { useClasses } from "@/data/classes";
+import { useClasses, type ClassRow } from "@/data/classes";
 import { usePlacements, useUpsertPlacement, useFinalizeEnrollment, useUpdateFinalizedLeerling, useUpdateEnrollmentStatus, useToggleTwijfel, finalizeBlockers, NIVEAUS, type Enrollment, type Placement } from "@/data/enrollments";
 import { useSetLesgeldOverride } from "@/data/tuition";
 import { ENROLL_COLUMNS } from "@/data/dashboard";
@@ -21,6 +21,11 @@ const STATUS_ORDER: Record<string, number> = { herinschrijving: 0, wachtlijst: 1
 const FALLBACK_STATUS = "wachtlijst";
 // Soft row tint per status.
 const ROW_BG: Record<string, string> = { toegezegd: "var(--info-soft)", definitief: "var(--success-soft)", afgewezen: "var(--danger-soft)" };
+
+// De query sorteert op `grade`, wat niet met de klasnamen hoeft mee te lopen.
+// numeric houdt "Klas 2" vóór "Klas 10" in plaats van tekstueel "10" < "2".
+const byCode = (a: ClassRow, b: ClassRow) =>
+  a.code.localeCompare(b.code, "nl", { numeric: true, sensitivity: "base" });
 
 function dateTimeNL(iso: string | null): string {
   if (!iso) return "—";
@@ -70,7 +75,9 @@ export function Klassenindeler({ enrollments }: { enrollments: Enrollment[] }) {
   };
 
   const pmap = placements ?? {};
-  const klassen = useMemo(() => (classes ?? []).filter((c) => track === "all" || c.track === track), [classes, track]);
+  // Eén op naam gesorteerde lijst voor zowel de tegels als de keuzelijst per rij.
+  const sortedClasses = useMemo(() => [...(classes ?? [])].sort(byCode), [classes]);
+  const klassen = useMemo(() => sortedClasses.filter((c) => track === "all" || c.track === track), [sortedClasses, track]);
 
   const classCode = useMemo(() => {
     const m: Record<string, string> = {};
@@ -227,7 +234,7 @@ export function Klassenindeler({ enrollments }: { enrollments: Enrollment[] }) {
         )}
       </Card>
 
-      <Card title={<><Icon name="list" size={14} /> Inschrijvingen indelen</>} sub="Alle inschrijvingen — filter op status om optimaal in te delen. Wijzigingen worden direct doorgevoerd (ook na definitief).">
+      <Card className="scroll-x" title={<><Icon name="list" size={14} /> Inschrijvingen indelen</>} sub="Alle inschrijvingen — filter op status om optimaal in te delen. Wijzigingen worden direct doorgevoerd (ook na definitief).">
         <div className="flex items-center gap-2 mb-3" style={{ flexWrap: "wrap" }}>
           <span className="text-xs text-subtle font-semibold" style={{ textTransform: "uppercase", letterSpacing: "0.05em" }}>Status:</span>
           {ENROLL_COLUMNS.map((c) => {
@@ -260,7 +267,7 @@ export function Klassenindeler({ enrollments }: { enrollments: Enrollment[] }) {
             </button>
           )}
         </div>
-        <table className="table">
+        <table className="table" style={{ minWidth: 1100 }}>
           <thead><tr>
             <Th label="Inschrijving" k="date" sort={sort} onSort={toggleSort} />
             <Th label="Status" k="status" sort={sort} onSort={toggleSort} />
@@ -276,7 +283,7 @@ export function Klassenindeler({ enrollments }: { enrollments: Enrollment[] }) {
               const p = pmap[e.id] ?? ({} as Partial<Placement>);
               const isDef = !!p.definitief;
               const blockers = finalizeBlockers(p as Placement);
-              const eligible = (classes ?? []).filter((c) => (e.track === "hifdh" ? c.track === "hifdh" : c.track !== "hifdh"));
+              const eligible = sortedClasses.filter((c) => (e.track === "hifdh" ? c.track === "hifdh" : c.track !== "hifdh"));
               return (
                 <tr key={e.id} onClick={() => setSelected(e)} style={{ background: ROW_BG[e.status] ?? "transparent", cursor: "pointer" }} title="Open inschrijving">
                   <td>
@@ -316,18 +323,11 @@ export function Klassenindeler({ enrollments }: { enrollments: Enrollment[] }) {
                       <Btn size="sm" kind={e.status === "toegezegd" ? "primary" : "default"} disabled={updateStatus.isPending}
                         title={e.status === "toegezegd" ? "Klik om Toegezegd weer weg te halen" : "Toezeggen"}
                         onClick={() => setStatus(e, "toegezegd")}>Toegezegd</Btn>
-                      <div className="flex-col" style={{ alignItems: "flex-end", gap: 2 }}>
-                        <Btn size="sm" kind={isDef ? "primary" : "default"} icon="check" disabled={(blockers.length > 0 && !isDef) || finalize.isPending}
-                          onClick={() => { if (!isDef) doFinalize(e); }}
-                          title={isDef ? "Definitief ingeschreven" : blockers.length ? `Kies eerst ${blockers.join(" en ")}` : "Definitief inschrijven"}>
-                          Definitief
-                        </Btn>
-                        {/* De reden stond alleen in een tooltip — die verschijnt
-                            nooit op een touchscreen en zag je dus niet. */}
-                        {!isDef && blockers.length > 0 && (
-                          <span className="text-xs" style={{ color: "var(--fg-faint)", whiteSpace: "nowrap" }}>eerst {blockers.join(" + ")}</span>
-                        )}
-                      </div>
+                      <Btn size="sm" kind={isDef ? "primary" : "default"} icon="check" disabled={(blockers.length > 0 && !isDef) || finalize.isPending}
+                        onClick={() => { if (!isDef) doFinalize(e); }}
+                        title={isDef ? "Definitief ingeschreven" : blockers.length ? `Kies eerst ${blockers.join(" en ")}` : "Definitief inschrijven"}>
+                        Definitief
+                      </Btn>
                       <button className="att-pill" data-status={e.status === "afgewezen" ? "O" : "-"} style={{ fontSize: 13 }}
                         title={e.status === "afgewezen" ? "Klik om Afgewezen weer weg te halen" : "Afwijzen"}
                         onClick={() => setStatus(e, "afgewezen")}>✗</button>
