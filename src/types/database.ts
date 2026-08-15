@@ -245,9 +245,10 @@ export interface Database {
       intake_choices: {
         Row: {
           id: string; intake_moment_id: string; intake_slot_id: string | null; enrollment_id: string;
-          other_text: string | null; chosen_at: string; updated_at: string;
+          other_text: string | null; note: string | null; response_group_id: string;
+          chosen_at: string; updated_at: string;
         };
-        Insert: { intake_moment_id: string; intake_slot_id: string; enrollment_id: string } & Partial<Database["public"]["Tables"]["intake_choices"]["Row"]>;
+        Insert: { intake_moment_id: string; enrollment_id: string } & Partial<Database["public"]["Tables"]["intake_choices"]["Row"]>;
         Update: Partial<Database["public"]["Tables"]["intake_choices"]["Row"]>;
         Relationships: [];
       };
@@ -357,7 +358,16 @@ export interface Database {
       finalize_enrollment: { Args: { p_placement_id: string }; Returns: string };
       get_public_intake: { Args: { p_token: string }; Returns: Json };
       is_admin: { Args: Record<string, never>; Returns: boolean };
-      submit_public_intake: { Args: { p_token: string; p_slot_id: string | null; p_other_text: string | null }; Returns: Json };
+      submit_public_intake: {
+        Args: {
+          p_token: string;
+          p_enrollment_ids: string[];
+          p_slot_id: string | null;
+          p_other_text: string | null;
+          p_note: string | null;
+        };
+        Returns: Json;
+      };
     };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;

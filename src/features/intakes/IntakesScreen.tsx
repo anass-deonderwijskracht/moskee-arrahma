@@ -5,7 +5,7 @@ import { useToast } from "@/components/chrome/Toast";
 import { ErrorState, Loading } from "@/features/_shared/states";
 import {
   useDeleteIntakeMoment,
-  useDeleteIntakeChoice,
+  useDeleteIntakeChoices,
   FIXED_INTAKE_END,
   FIXED_INTAKE_START,
   useIntakeMoments,
@@ -23,6 +23,39 @@ const STATUS_LABEL: Record<IntakeStatus, string> = {
 };
 
 const STATUS_KIND = { concept: "default", actief: "success", verlopen: "warn" } as const;
+
+type IntakeResponse = {
+  id: string;
+  choices: IntakeMoment["intake_choices"];
+  childNames: string[];
+  intakeSlotId: string | null;
+  otherText: string | null;
+  note: string | null;
+  updatedAt: string;
+};
+
+function groupResponses(choices: IntakeMoment["intake_choices"]): IntakeResponse[] {
+  const grouped = new Map<string, IntakeMoment["intake_choices"]>();
+  for (const choice of choices) {
+    const current = grouped.get(choice.response_group_id) ?? [];
+    current.push(choice);
+    grouped.set(choice.response_group_id, current);
+  }
+
+  return [...grouped.entries()].map(([id, group]) => {
+    const latest = [...group].sort((a, b) => b.updated_at.localeCompare(a.updated_at))[0];
+    return {
+      id,
+      choices: group,
+      childNames: group.map((choice) => choice.enrollments?.child_name ?? "Onbekende inschrijving")
+        .sort((a, b) => a.localeCompare(b, "nl")),
+      intakeSlotId: latest.intake_slot_id,
+      otherText: latest.other_text,
+      note: latest.note,
+      updatedAt: latest.updated_at,
+    };
+  }).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+}
 
 function dateLabel(date: string) {
   return new Date(`${date}T12:00:00`).toLocaleDateString("nl-NL", {
@@ -50,7 +83,7 @@ export function IntakesScreen() {
   const { data, isLoading, isError, error } = useIntakeMoments();
   const setStatus = useSetIntakeStatus();
   const remove = useDeleteIntakeMoment();
-  const removeChoice = useDeleteIntakeChoice();
+  const removeChoice = useDeleteIntakeChoices();
   const [editing, setEditing] = useState<Partial<IntakeMoment> | null>(null);
 
   if (isError) return <ErrorState error={error} />;
@@ -80,12 +113,12 @@ export function IntakesScreen() {
     }
   };
 
-  const deleteChoice = async (choice: IntakeMoment["intake_choices"][number]) => {
-    const name = choice.enrollments?.child_name ?? "deze inschrijving";
-    if (!confirm(`Intakekeuze van ${name} verwijderen? De persoonlijke link blijft werken en toont daarna opnieuw het keuzeformulier.`)) return;
+  const deleteChoice = async (response: IntakeResponse) => {
+    const names = response.childNames.join(", ");
+    if (!confirm(`Intakekeuze voor ${names} verwijderen? De persoonlijke ouderlink blijft werken en toont daarna opnieuw het keuzeformulier.`)) return;
     try {
-      await removeChoice.mutateAsync(choice.id);
-      toast(`Intakekeuze van ${name} verwijderd`);
+      await removeChoice.mutateAsync(response.choices.map((choice) => choice.id));
+      toast(`Intakekeuze voor ${names} verwijderd`);
     } catch (err) {
       toast("Keuze verwijderen mislukt: " + (err instanceof Error ? err.message : "onbekend"));
     }
@@ -110,14 +143,16 @@ export function IntakesScreen() {
       ) : (
         <div className="flex-col gap-4">
           {moments.map((moment) => {
-            const choicesBySlot = new Map<string, typeof moment.intake_choices>();
-            for (const choice of moment.intake_choices) {
-              if (!choice.intake_slot_id) continue;
-              const current = choicesBySlot.get(choice.intake_slot_id) ?? [];
-              current.push(choice);
-              choicesBySlot.set(choice.intake_slot_id, current);
+            const responses = groupResponses(moment.intake_choices);
+            const responsesBySlot = new Map<string, IntakeResponse[]>();
+            for (const response of responses) {
+              if (!response.intakeSlotId) continue;
+              const current = responsesBySlot.get(response.intakeSlotId) ?? [];
+              current.push(response);
+              responsesBySlot.set(response.intakeSlotId, current);
             }
-            const otherChoices = moment.intake_choices.filter((choice) => !choice.intake_slot_id && choice.other_text);
+            const otherResponses = responses.filter((response) => !response.intakeSlotId && response.otherText);
+            const otherChildCount = otherResponses.reduce((total, response) => total + response.childNames.length, 0);
             const slotById = new Map(moment.intake_slots.map((slot) => [slot.id, slot]));
             return (
               <Card
@@ -146,36 +181,42 @@ export function IntakesScreen() {
                   </div>
                   <div className="intake-meta-card">
                     <span className="text-xs text-subtle">Reacties</span>
-                    <strong>{moment.intake_choices.length}</strong>
+                    <strong>{responses.length} {responses.length === 1 ? "afspraak" : "afspraken"}</strong>
+                    <span className="text-xs text-subtle">{moment.intake_choices.length} {moment.intake_choices.length === 1 ? "kind" : "kinderen"}</span>
                   </div>
                 </div>
 
                 <div className="intake-slot-list">
                   {moment.intake_slots.map((slot) => {
-                    const choices = choicesBySlot.get(slot.id) ?? [];
+                    const slotResponses = responsesBySlot.get(slot.id) ?? [];
+                    const childCount = slotResponses.reduce((total, response) => total + response.childNames.length, 0);
                     return (
                       <div className="intake-slot-admin" key={slot.id}>
                         <div className="intake-slot-date">
                           <Icon name="calendar" size={15} />
                           <div><strong>{dateLabel(slot.date)}</strong><span>{timeLabel(slot.start_time)} – {timeLabel(slot.end_time)}</span></div>
                         </div>
-                        <Badge kind={choices.length ? "primary" : "default"}>{choices.length} gekozen</Badge>
+                        <Badge kind={slotResponses.length ? "primary" : "default"}>
+                          {slotResponses.length} {slotResponses.length === 1 ? "afspraak" : "afspraken"} · {childCount} {childCount === 1 ? "kind" : "kinderen"}
+                        </Badge>
                         <div className="intake-slot-names">
-                          {choices.length ? choices.map((choice) => choice.enrollments?.child_name ?? "Onbekende inschrijving").join(", ") : "Nog niemand"}
+                          {slotResponses.length ? slotResponses.map((response) => response.childNames.join(", ")).join(" · ") : "Nog niemand"}
                         </div>
                       </div>
                     );
                   })}
-                  {(moment.allow_other || otherChoices.length > 0) && (
+                  {(moment.allow_other || otherResponses.length > 0) && (
                     <div className="intake-slot-admin">
                       <div className="intake-slot-date">
                         <Icon name="edit" size={15} />
                         <div><strong>Ander moment</strong><span>Vrij tekstveld</span></div>
                       </div>
-                      <Badge kind={otherChoices.length ? "primary" : "default"}>{otherChoices.length} gekozen</Badge>
+                      <Badge kind={otherResponses.length ? "primary" : "default"}>
+                        {otherResponses.length} {otherResponses.length === 1 ? "afspraak" : "afspraken"} · {otherChildCount} {otherChildCount === 1 ? "kind" : "kinderen"}
+                      </Badge>
                       <div className="intake-slot-names">
-                        {otherChoices.length
-                          ? otherChoices.map((choice) => `${choice.enrollments?.child_name ?? "Onbekend"}: ${choice.other_text}`).join(" · ")
+                        {otherResponses.length
+                          ? otherResponses.map((response) => `${response.childNames.join(", ")}: ${response.otherText}`).join(" · ")
                           : "Nog niemand"}
                       </div>
                     </div>
@@ -185,27 +226,28 @@ export function IntakesScreen() {
                 <div className="intake-responses-head">
                   <div>
                     <div className="font-semibold">Inschrijvingen en hun keuze</div>
-                    <div className="text-xs text-subtle">De laatst opgeslagen voorkeur staat hieronder.</div>
+                    <div className="text-xs text-subtle">Eén rij per ouderreactie; meerdere kinderen vormen samen één afspraak.</div>
                   </div>
                 </div>
                 <div className="scroll-x">
-                  <table className="table" style={{ minWidth: 680 }}>
-                    <thead><tr><th>Inschrijving</th><th>Gekozen moment</th><th>Gekozen / gewijzigd op</th><th style={{ width: 1 }}></th></tr></thead>
+                  <table className="table" style={{ minWidth: 860 }}>
+                    <thead><tr><th>Kinderen</th><th>Gekozen moment</th><th>Opmerkingen</th><th>Gekozen / gewijzigd op</th><th style={{ width: 1 }}></th></tr></thead>
                     <tbody>
-                      {moment.intake_choices.map((choice) => {
-                        const slot = choice.intake_slot_id ? slotById.get(choice.intake_slot_id) : undefined;
+                      {responses.map((response) => {
+                        const slot = response.intakeSlotId ? slotById.get(response.intakeSlotId) : undefined;
                         return (
-                          <tr key={choice.id}>
-                            <td className="font-semibold">{choice.enrollments?.child_name ?? "Onbekende inschrijving"}</td>
+                          <tr key={response.id}>
+                            <td><div className="font-semibold">{response.childNames.join(", ")}</div><div className="text-xs text-subtle">{response.childNames.length} {response.childNames.length === 1 ? "kind" : "kinderen"}</div></td>
                             <td>{slot
                               ? `${dateLabel(slot.date)} · ${timeLabel(slot.start_time)} – ${timeLabel(slot.end_time)}`
-                              : choice.other_text ? `Anders: ${choice.other_text}` : "—"}</td>
-                            <td className="text-subtle">{dateTimeLabel(choice.updated_at)}</td>
-                            <td><Btn size="sm" kind="danger" icon="trash" disabled={removeChoice.isPending} onClick={() => void deleteChoice(choice)}>Verwijderen</Btn></td>
+                              : response.otherText ? `Anders: ${response.otherText}` : "—"}</td>
+                            <td className="intake-response-note">{response.note || "—"}</td>
+                            <td className="text-subtle">{dateTimeLabel(response.updatedAt)}</td>
+                            <td><Btn size="sm" kind="danger" icon="trash" disabled={removeChoice.isPending} onClick={() => void deleteChoice(response)}>Verwijderen</Btn></td>
                           </tr>
                         );
                       })}
-                      {moment.intake_choices.length === 0 && <tr><td colSpan={4}><div className="empty">Nog geen keuzes ontvangen.</div></td></tr>}
+                      {responses.length === 0 && <tr><td colSpan={5}><div className="empty">Nog geen keuzes ontvangen.</div></td></tr>}
                     </tbody>
                   </table>
                 </div>

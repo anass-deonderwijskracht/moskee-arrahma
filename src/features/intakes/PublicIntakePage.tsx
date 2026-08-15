@@ -25,29 +25,45 @@ export function PublicIntakePage() {
   const safeToken = token && UUID_PATTERN.test(token) ? token : undefined;
   const { data, isLoading, isError } = usePublicIntake(safeToken);
   const submit = useSubmitPublicIntake(safeToken ?? "");
+  const [selectedChildren, setSelectedChildren] = useState<string[]>([]);
   const [selected, setSelected] = useState("");
   const [otherText, setOtherText] = useState("");
+  const [note, setNote] = useState("");
   const [editing, setEditing] = useState(false);
 
   useEffect(() => {
-    if (data?.selection?.other_text) {
+    if (!data) return;
+    setSelectedChildren(data.selection?.enrollment_ids ?? []);
+    setNote(data.selection?.note ?? "");
+    if (data.selection?.other_text) {
       setSelected(OTHER_VALUE);
       setOtherText(data.selection.other_text);
-    } else if (data?.selection?.slot_id) {
+    } else if (data.selection?.slot_id) {
       setSelected(data.selection.slot_id);
       setOtherText("");
+    } else {
+      setSelected("");
+      setOtherText("");
     }
-  }, [data?.selection?.other_text, data?.selection?.slot_id]);
+  }, [data]);
 
   const choosingOther = selected === OTHER_VALUE;
-  const canSubmit = !!selected && (!choosingOther || !!otherText.trim());
+  const canSubmit = selectedChildren.length > 0 && !!selected && (!choosingOther || !!otherText.trim());
+
+  const toggleChild = (id: string) => {
+    setSelectedChildren((current) => current.includes(id)
+      ? current.filter((childId) => childId !== id)
+      : [...current, id]);
+  };
 
   const save = async () => {
     if (!canSubmit || !safeToken) return;
     try {
       await submit.mutateAsync({
+        enrollmentIds: selectedChildren,
         slotId: choosingOther ? null : selected,
         otherText: choosingOther ? otherText.trim() : null,
+        note: note.trim() || null,
       });
       setEditing(false);
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -80,21 +96,37 @@ export function PublicIntakePage() {
 
   const selectedSlot = data.slots.find((slot) => slot.id === data.selection?.slot_id);
   const savedOtherText = data.selection?.other_text?.trim() ?? "";
-  if (data.selection && (selectedSlot || savedOtherText) && !editing) {
+  const savedChildren = data.enrollments.filter((enrollment) => data.selection?.enrollment_ids.includes(enrollment.id));
+  if (data.selection && savedChildren.length > 0 && (selectedSlot || savedOtherText) && !editing) {
     return (
       <PublicLayout>
         <div className="public-intake-confirm">
           <div className="public-intake-saved"><Icon name="check" size={15} /> Voorkeur opgeslagen</div>
-          <h1>Bedankt, {data.enrollment.child_name}</h1>
-          <p>Je intakevoorkeur is ontvangen.</p>
-          <div className="public-intake-confirm-slot">
-            <Icon name={selectedSlot ? "calendar" : "edit"} size={18} />
-            <div>
-              <span>Gekozen moment</span>
-              <strong>{selectedSlot ? slotLabel(selectedSlot) : `Anders: ${savedOtherText}`}</strong>
+          <h1>Bedankt</h1>
+          <p>De intakevoorkeur is ontvangen.</p>
+          <div className="public-intake-confirm-grid">
+            <div className="public-intake-confirm-slot">
+              <Icon name="users" size={18} />
+              <div>
+                <span>{savedChildren.length === 1 ? "Kind" : "Kinderen"}</span>
+                <strong>{savedChildren.map((child) => child.first_name).join(", ")}</strong>
+              </div>
             </div>
+            <div className="public-intake-confirm-slot">
+              <Icon name={selectedSlot ? "calendar" : "edit"} size={18} />
+              <div>
+                <span>Gekozen moment</span>
+                <strong>{selectedSlot ? slotLabel(selectedSlot) : `Anders: ${savedOtherText}`}</strong>
+              </div>
+            </div>
+            {data.selection.note && (
+              <div className="public-intake-confirm-note">
+                <span>Opmerkingen</span>
+                <p>{data.selection.note}</p>
+              </div>
+            )}
           </div>
-          <p className="public-intake-duration"><Icon name="clock" size={15} /> Duur per intake: {data.moment.duration_text}</p>
+          <p className="public-intake-duration"><Icon name="clock" size={15} /> Duur van de afspraak: {data.moment.duration_text}</p>
           <button className="public-intake-secondary" type="button" onClick={() => setEditing(true)}>Voorkeur wijzigen</button>
         </div>
       </PublicLayout>
@@ -104,53 +136,75 @@ export function PublicIntakePage() {
   return (
     <PublicLayout>
       <div className="public-intake-head">
-        <h1>Intake voor {data.enrollment.child_name}</h1>
+        <h1>Intakeformulier</h1>
         <p className="public-intake-description">{data.moment.description}</p>
-        <p className="public-intake-duration"><Icon name="clock" size={15} /> Duur per intake: {data.moment.duration_text}</p>
+        <p className="public-intake-duration"><Icon name="clock" size={15} /> Duur van de afspraak: {data.moment.duration_text}</p>
       </div>
 
       <div className="public-intake-form">
-        <div className="public-intake-form-head">
-          <h2>Kies een moment</h2>
-          <p>Kies één optie. Via dezelfde link kun je je keuze later wijzigen.</p>
-        </div>
-
-        <fieldset className="public-intake-options">
-          <legend className="sr-only">Beschikbare intakemomenten</legend>
-          {data.slots.map((slot) => {
-            const checked = selected === slot.id;
-            return (
-              <label className={`public-intake-option${checked ? " selected" : ""}`} key={slot.id}>
-                <input type="radio" name="intake-slot" value={slot.id} checked={checked} onChange={() => setSelected(slot.id)} />
-                <span className="public-intake-radio" aria-hidden="true" />
-                <span className="public-intake-option-date">
-                  <strong>{dateLabel(slot.date)}</strong>
-                  <span>{timeLabel(slot.start_time)}–{timeLabel(slot.end_time)}</span>
-                </span>
-              </label>
-            );
-          })}
-
-          {data.moment.allow_other && (
-            <div className={`public-intake-other${choosingOther ? " selected" : ""}`}>
-              <label className={`public-intake-option${choosingOther ? " selected" : ""}`}>
-                <input type="radio" name="intake-slot" value={OTHER_VALUE} checked={choosingOther} onChange={() => setSelected(OTHER_VALUE)} />
-                <span className="public-intake-radio" aria-hidden="true" />
-                <span className="public-intake-option-date"><strong>Anders</strong><span>Geef zelf aan wat mogelijk is</span></span>
-              </label>
-              {choosingOther && (
-                <div className="public-intake-other-field">
-                  <label htmlFor="other-moment">Welke dag of welk tijdstip komt beter uit?</label>
-                  <textarea id="other-moment" rows={3} maxLength={500} value={otherText} onChange={(event) => setOtherText(event.target.value)} />
-                  <span>{otherText.length}/500</span>
-                </div>
-              )}
-            </div>
-          )}
+        <fieldset className="public-intake-section">
+          <legend><span>1</span> Om welke kinderen gaat het?</legend>
+          <p>Selecteer één of meerdere kinderen. De afspraak duurt even lang, ongeacht het aantal kinderen.</p>
+          <div className="public-intake-children">
+            {data.enrollments.map((enrollment) => {
+              const checked = selectedChildren.includes(enrollment.id);
+              return (
+                <label className={`public-intake-child${checked ? " selected" : ""}`} key={enrollment.id}>
+                  <input type="checkbox" checked={checked} onChange={() => toggleChild(enrollment.id)} />
+                  <span className="public-intake-checkbox" aria-hidden="true"><Icon name="check" size={13} /></span>
+                  <strong>{enrollment.first_name}</strong>
+                </label>
+              );
+            })}
+          </div>
         </fieldset>
 
+        <fieldset className="public-intake-section">
+          <legend><span>2</span> Kies een moment</legend>
+          <p>Kies één optie. Via dezelfde link kun je de keuze later wijzigen.</p>
+          <div className="public-intake-options">
+            {data.slots.map((slot) => {
+              const checked = selected === slot.id;
+              return (
+                <label className={`public-intake-option${checked ? " selected" : ""}`} key={slot.id}>
+                  <input type="radio" name="intake-slot" value={slot.id} checked={checked} onChange={() => setSelected(slot.id)} />
+                  <span className="public-intake-radio" aria-hidden="true" />
+                  <span className="public-intake-option-date">
+                    <strong>{dateLabel(slot.date)}</strong>
+                    <span>{timeLabel(slot.start_time)}–{timeLabel(slot.end_time)}</span>
+                  </span>
+                </label>
+              );
+            })}
+
+            {data.moment.allow_other && (
+              <div className={`public-intake-other${choosingOther ? " selected" : ""}`}>
+                <label className={`public-intake-option${choosingOther ? " selected" : ""}`}>
+                  <input type="radio" name="intake-slot" value={OTHER_VALUE} checked={choosingOther} onChange={() => setSelected(OTHER_VALUE)} />
+                  <span className="public-intake-radio" aria-hidden="true" />
+                  <span className="public-intake-option-date"><strong>Anders</strong><span>Geef zelf aan wat mogelijk is</span></span>
+                </label>
+                {choosingOther && (
+                  <div className="public-intake-other-field">
+                    <label htmlFor="other-moment">Welke dag of welk tijdstip komt beter uit?</label>
+                    <textarea id="other-moment" rows={3} maxLength={500} value={otherText} onChange={(event) => setOtherText(event.target.value)} />
+                    <span>{otherText.length}/500</span>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </fieldset>
+
+        <div className="public-intake-section">
+          <div className="public-intake-section-title"><span>3</span> Opmerkingen <small>optioneel</small></div>
+          <label className="sr-only" htmlFor="intake-note">Opmerkingen</label>
+          <textarea className="public-intake-note" id="intake-note" rows={4} maxLength={1000} value={note} onChange={(event) => setNote(event.target.value)} />
+          <div className="public-intake-counter">{note.length}/1000</div>
+        </div>
+
         {data.slots.length === 0 && !data.moment.allow_other && <div className="public-intake-error">Er zijn nog geen beschikbare momenten. Neem contact op met Moskee Arrahma.</div>}
-        {submit.isError && <div className="public-intake-error" role="alert">Opslaan is niet gelukt. Controleer je verbinding en probeer het opnieuw.</div>}
+        {submit.isError && <div className="public-intake-error" role="alert">Opslaan is niet gelukt. Controleer de ingevulde gegevens en probeer het opnieuw.</div>}
 
         <div className="public-intake-actions">
           {data.selection && <button className="public-intake-secondary" type="button" onClick={() => setEditing(false)}>Annuleren</button>}

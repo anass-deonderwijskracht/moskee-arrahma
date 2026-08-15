@@ -179,7 +179,7 @@ export function Klassenindeler({ enrollments }: { enrollments: Enrollment[] }) {
     const link = `${window.location.origin}/intake/${enrollment.intake_access_token}`;
     try {
       await navigator.clipboard.writeText(link);
-      toast(`Persoonlijke intakelink voor ${enrollment.child_name} gekopieerd`);
+      toast(`Ouderlink voor het gezin van ${enrollment.child_name} gekopieerd`);
     } catch {
       const input = document.createElement("textarea");
       input.value = link;
@@ -189,7 +189,7 @@ export function Klassenindeler({ enrollments }: { enrollments: Enrollment[] }) {
       input.select();
       const copied = document.execCommand("copy");
       input.remove();
-      toast(copied ? `Persoonlijke intakelink voor ${enrollment.child_name} gekopieerd` : "Kopiëren is niet gelukt");
+      toast(copied ? `Ouderlink voor het gezin van ${enrollment.child_name} gekopieerd` : "Kopiëren is niet gelukt");
     }
   };
 
@@ -340,8 +340,8 @@ export function Klassenindeler({ enrollments }: { enrollments: Enrollment[] }) {
                         </div>
                       ) : <span className="text-xs text-subtle">Nog niet gekozen</span>}
                       <Btn size="sm" kind="ghost" icon="copy" disabled={!activeIntake || !e.intake_access_token}
-                        title={activeIntake ? `Persoonlijke intakelink voor ${e.child_name} kopiëren` : "Er is geen actief intakemoment"}
-                        aria-label={`Intakelink voor ${e.child_name} kopiëren`}
+                        title={activeIntake ? `Ouderlink voor het gezin van ${e.child_name} kopiëren` : "Er is geen actief intakemoment"}
+                        aria-label={`Ouderlink voor het gezin van ${e.child_name} kopiëren`}
                         onClick={() => void copyIntakeLink(e)} />
                     </div>
                   </td>

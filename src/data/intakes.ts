@@ -34,9 +34,16 @@ export type SaveIntakeMomentInput = {
 
 export type PublicIntake = {
   moment: { id: string; description: string; duration_text: string; allow_other: boolean };
-  enrollment: { child_name: string };
+  enrollments: { id: string; first_name: string }[];
   slots: Pick<IntakeSlot, "id" | "date" | "start_time" | "end_time">[];
-  selection: { slot_id: string | null; other_text: string | null; chosen_at: string; updated_at: string } | null;
+  selection: {
+    enrollment_ids: string[];
+    slot_id: string | null;
+    other_text: string | null;
+    note: string | null;
+    chosen_at: string;
+    updated_at: string;
+  } | null;
 };
 
 export type ActiveIntakeSelection = {
@@ -168,12 +175,12 @@ export function useDeleteIntakeMoment() {
   });
 }
 
-/** Verwijdert alleen de opgeslagen voorkeur; de inschrijving en link blijven bestaan. */
-export function useDeleteIntakeChoice() {
+/** Verwijdert één volledige afspraak; de inschrijvingen en links blijven bestaan. */
+export function useDeleteIntakeChoices() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from("intake_choices").delete().eq("id", id);
+    mutationFn: async (ids: string[]) => {
+      const { error } = await supabase.from("intake_choices").delete().in("id", ids);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -214,11 +221,18 @@ export function usePublicIntake(token: string | undefined) {
 export function useSubmitPublicIntake(token: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ slotId, otherText }: { slotId: string | null; otherText: string | null }): Promise<PublicIntake> => {
+    mutationFn: async ({ enrollmentIds, slotId, otherText, note }: {
+      enrollmentIds: string[];
+      slotId: string | null;
+      otherText: string | null;
+      note: string | null;
+    }): Promise<PublicIntake> => {
       const { data, error } = await supabase.rpc("submit_public_intake", {
         p_token: token,
+        p_enrollment_ids: enrollmentIds,
         p_slot_id: slotId,
         p_other_text: otherText,
+        p_note: note,
       });
       if (error) throw error;
       return data as unknown as PublicIntake;
