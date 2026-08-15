@@ -3,7 +3,7 @@ import { Card, Btn, Badge, Select } from "@/components/ui";
 import { Modal, Field, ModalFooter } from "@/components/ui/Modal";
 import { Loading, ErrorState } from "@/features/_shared/states";
 import { useToast } from "@/components/chrome/Toast";
-import { usePlanningMatrix, useSaveLessons, useCreateLessons, useDuplicateLessons, type LessonPatch } from "@/data/planning";
+import { usePlanningMatrix, useSaveLessons, useCreateLessons, useDuplicateLessons, useDeleteLessons, type LessonPatch } from "@/data/planning";
 import { useTeachers } from "@/data/people";
 import { useSchooljaren, useCurrentSchooljaar } from "@/data/schooljaren";
 
@@ -46,6 +46,7 @@ export function Roostermatrix() {
   const save = useSaveLessons(effectiveSj);
   const createLessons = useCreateLessons(effectiveSj);
   const duplicate = useDuplicateLessons(effectiveSj);
+  const removeLessons = useDeleteLessons(effectiveSj);
 
   const classes = data?.classes ?? [];
   const weeks = data?.weeks ?? [];
@@ -142,6 +143,31 @@ export function Roostermatrix() {
     rowRefs.current[currentWeek.week_nr]?.scrollIntoView({ behavior: "smooth", block: "center" });
     setFlashWeek(currentWeek.week_nr);
     setTimeout(() => setFlashWeek(null), 1200);
+  };
+
+  // Verwijdert de lessen achter de geselecteerde weken × geselecteerde klassen.
+  const onDeleteSelection = async () => {
+    const ids: string[] = [];
+    for (const c of classes) {
+      if (!selected.has(c.id)) continue;
+      for (const wk of selectedWeeks) {
+        const lesson = byKey[`${c.id}|${wk}`];
+        if (lesson) ids.push(lesson.id);
+      }
+    }
+    if (!ids.length) { toast("Geen lessen in deze selectie"); return; }
+    const wkList = [...selectedWeeks].sort((a, b) => a - b).join(", ");
+    if (!confirm(
+      `${ids.length} les(sen) definitief verwijderen?\n\n`
+      + `Week ${wkList} · ${selected.size} klas(sen).\n\n`
+      + "De aanwezigheidsregistratie en lesnotities van die lessen verdwijnen mee. "
+      + "Qur'an-opdrachten blijven bestaan maar raken hun leskoppeling kwijt.",
+    )) return;
+    try {
+      await removeLessons.mutateAsync(ids);
+      setSelectedWeeks(new Set());
+      toast(`${ids.length} les(sen) verwijderd`);
+    } catch (e) { toast("Verwijderen mislukt: " + (e instanceof Error ? e.message : "")); }
   };
 
   const onSave = async () => {
@@ -269,6 +295,11 @@ export function Roostermatrix() {
                 {teacherOpts.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
               </Select>
               {!noSel && <button className="btn ghost sm" onClick={() => setSelectedWeeks(new Set())}>Weken deselecteren</button>}
+              {!noSel && (
+                <Btn size="sm" kind="danger" icon="trash" disabled={removeLessons.isPending} onClick={onDeleteSelection}>
+                  Lessen verwijderen
+                </Btn>
+              )}
             </div>
           );
         })()}

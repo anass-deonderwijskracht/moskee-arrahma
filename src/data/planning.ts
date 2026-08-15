@@ -99,6 +99,155 @@ export function useDuplicateLessons(schooljaarId: string | null) {
   });
 }
 
+/** Verwijdert de lessen zelf. Aanwezigheid en lesnotities hangen er met een
+ *  cascade aan en verdwijnen mee; Qur'an-opdrachten blijven bestaan maar raken
+ *  hun leskoppeling kwijt (on delete set null). */
+export function useDeleteLessons(schooljaarId: string | null) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (lessonIds: string[]) => {
+      if (!lessonIds.length) return 0;
+      const { error } = await supabase.from("lessons").delete().in("id", lessonIds);
+      if (error) throw error;
+      await supabase.from("audit_log").insert({
+        action: "lessen verwijderd", object: `${lessonIds.length} les(sen)`, type: "plan", user_label: "Beheerder",
+      } as never);
+      return lessonIds.length;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["planning-matrix", schooljaarId] });
+      qc.invalidateQueries({ queryKey: ["lessons"] });
+      qc.invalidateQueries({ queryKey: ["class-detail"] });
+      qc.invalidateQueries({ queryKey: ["leerling-detail"] });
+      qc.invalidateQueries({ queryKey: ["leerling-metrics"] });
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Lesweken genereren voor een heel schooljaar
+// ---------------------------------------------------------------------------
+
+/** Nederlandse dagnaam → weekdag (0 = zondag, zoals Date.getDay()). */
+const DAY_INDEX: Record<string, number> = {
+  zondag: 0, maandag: 1, dinsdag: 2, woensdag: 3, donderdag: 4, vrijdag: 5, zaterdag: 6,
+};
+
+const iso = (d: Date) => d.toISOString().slice(0, 10);
+
+export interface GenerateWeeksResult {
+  created: number;
+  skipped: number;
+  weeks: number;
+  /** Klassen zonder lesdag — daarvoor valt geen datum te bepalen. */
+  withoutDay: string[];
+}
+
+/**
+ * Maakt per klas één les per week tussen begin- en einddatum, op de lesdag van
+ * die klas. Bestaande lessen op dezelfde datum blijven staan, dus nogmaals
+ * draaien voegt alleen de ontbrekende weken toe.
+ */
+export function useGenerateLesweken() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ schooljaarId, start, end }: { schooljaarId: string; start: string; end: string }): Promise<GenerateWeeksResult> => {
+      if (!start || !end) throw new Error("Kies eerst een begin- en einddatum");
+      if (start > end) throw new Error("De einddatum ligt vóór de begindatum");
+
+      // Datums vastleggen op het schooljaar zelf.
+      const { error: sjErr } = await supabase
+        .from("schooljaren").update({ start_date: start, end_date: end } as never).eq("id", schooljaarId);
+      if (sjErr) throw sjErr;
+
+      const { data: classRows, error: cErr } = await supabase
+        .from("classes")
+        .select("id, code, day, location")
+        .eq("schooljaar_id", schooljaarId)
+        .eq("historic", false)
+        .eq("is_next", false);
+      if (cErr) throw cErr;
+      const klassen = (classRows ?? []) as { id: string; code: string; day: string | null; location: string | null }[];
+      if (!klassen.length) throw new Error("Dit schooljaar heeft nog geen klassen");
+
+      const withDay = klassen.filter((c) => c.day && DAY_INDEX[c.day.toLowerCase()] !== undefined);
+      const withoutDay = klassen.filter((c) => !withDay.includes(c)).map((c) => c.code);
+
+      const startD = new Date(start + "T00:00:00");
+      const endD = new Date(end + "T00:00:00");
+      // Anker op de maandag van de eerste week, zodat alle klassen in dezelfde
+      // kalenderweek hetzelfde weeknummer krijgen — ook bij verschillende lesdagen.
+      const mondayOf = (d: Date) => {
+        const m = new Date(d);
+        m.setDate(m.getDate() - ((m.getDay() + 6) % 7));
+        return m;
+      };
+      const anchor = mondayOf(startD);
+
+      // Bestaande lessen: overslaan én hun weeknummer hergebruiken, zodat een
+      // bijgegenereerde week niet als losse extra rij in de matrix belandt.
+      const bestaand = new Set<string>();
+      const weekNrByMonday = new Map<string, number>();
+      if (withDay.length) {
+        const { data: existing, error: lErr } = await supabase
+          .from("lessons").select("class_id, date, week_nr").in("class_id", withDay.map((c) => c.id));
+        if (lErr) throw lErr;
+        for (const l of (existing ?? []) as { class_id: string; date: string; week_nr: number | null }[]) {
+          bestaand.add(`${l.class_id}|${l.date}`);
+          if (l.week_nr == null) continue;
+          const key = iso(mondayOf(new Date(l.date + "T00:00:00")));
+          if (!weekNrByMonday.has(key)) weekNrByMonday.set(key, l.week_nr);
+        }
+      }
+
+      const rows: Record<string, unknown>[] = [];
+      let skipped = 0;
+      let weeks = 0;
+
+      for (let w = 0; ; w++) {
+        const monday = new Date(anchor);
+        monday.setDate(monday.getDate() + w * 7);
+        if (monday > endD) break;
+        if (w > 60) break; // vangnet tegen een onbedoeld enorme reeks
+        const weekNr = weekNrByMonday.get(iso(monday)) ?? w + 1;
+
+        let usedThisWeek = false;
+        for (const c of withDay) {
+          const offset = (DAY_INDEX[c.day!.toLowerCase()] + 6) % 7; // maandag = 0
+          const d = new Date(monday);
+          d.setDate(d.getDate() + offset);
+          if (d < startD || d > endD) continue;
+          usedThisWeek = true;
+          const date = iso(d);
+          if (bestaand.has(`${c.id}|${date}`)) { skipped++; continue; }
+          rows.push({
+            class_id: c.id, date, week_nr: weekNr, type: "les",
+            topic: "Wekelijkse les", location: c.location ?? "Moskee Arrahma",
+          });
+        }
+        if (usedThisWeek) weeks++;
+      }
+
+      if (rows.length) {
+        const { error } = await supabase.from("lessons").insert(rows as never);
+        if (error) throw error;
+        await supabase.from("audit_log").insert({
+          action: "lesweken gegenereerd",
+          object: `${rows.length} les(sen) over ${weeks} weken`,
+          type: "plan", user_label: "Beheerder",
+        } as never);
+      }
+
+      return { created: rows.length, skipped, weeks, withoutDay };
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["planning-matrix"] });
+      qc.invalidateQueries({ queryKey: ["schooljaren"] });
+      qc.invalidateQueries({ queryKey: ["lessons"] });
+    },
+  });
+}
+
 export interface LessonPatch { id: string; teacher_id: string | null; quran_teacher_id: string | null; type: string; teacher_na: boolean; quran_na: boolean }
 
 export function useSaveLessons(schooljaarId: string | null) {

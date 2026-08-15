@@ -11,6 +11,7 @@ import { useTuitionTiers, useTuitionTierMutations, TRACKS, type Track } from "@/
 import { useClasses } from "@/data/classes";
 import { useUsers, useCreateUser, useUpdateUser, useDeleteUser, type AppUser } from "@/data/users";
 import { useAuditLog, useSaveSettings, useSchooljaarCounts, useSchooljaarMutations } from "@/data/settings";
+import { useGenerateLesweken, type GenerateWeeksResult } from "@/data/planning";
 import { useTableTools, SortTh, SelectTh, BulkBar } from "@/features/_shared/tableTools";
 import { GoogleContactsSettings } from "./GoogleContactsSettings";
 
@@ -30,11 +31,12 @@ function toCsv(rows: Record<string, unknown>[]): string {
   return [headers.join(";"), ...rows.map((r) => headers.map((h) => esc(r[h])).join(";"))].join("\n");
 }
 
-type SectionId = "general" | "users" | "schooljaren" | "contacts" | "audit" | "data";
+type SectionId = "general" | "users" | "schooljaren" | "planning" | "contacts" | "audit" | "data";
 const SECTIONS: { id: SectionId; label: string; icon: IconName }[] = [
   { id: "general", label: "Algemeen", icon: "settings" },
   { id: "users", label: "Gebruikersbeheer", icon: "user" },
   { id: "schooljaren", label: "Schooljaren", icon: "calendar" },
+  { id: "planning", label: "Planning", icon: "list" },
   { id: "contacts", label: "Google Contacts", icon: "phone" },
   { id: "audit", label: "Audit log", icon: "activity" },
   { id: "data", label: "Data & export", icon: "download" },
@@ -56,6 +58,7 @@ export function SettingsScreen() {
           {section === "general" && <GeneralSettings />}
           {section === "users" && <UserManagement />}
           {section === "schooljaren" && <SchooljarenSettings />}
+          {section === "planning" && <PlanningSettings />}
           {section === "contacts" && <GoogleContactsSettings />}
           {section === "audit" && <AuditLog />}
           {section === "data" && <DataExport />}
@@ -93,6 +96,100 @@ function GeneralSettings() {
           <div className="field"><label>E-mail</label><input className="input" value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} /></div>
         </div>
         <div className="flex justify-end mt-3"><Btn kind="primary" icon="check" disabled={save.isPending} onClick={onSave}>Opslaan</Btn></div>
+      </Card>
+    </div>
+  );
+}
+
+function PlanningSettings() {
+  const toast = useToast();
+  const { data: schooljaren } = useSchooljaren();
+  const { data: current } = useCurrentSchooljaar();
+  const [sjId, setSjId] = useState<string | null>(null);
+  const effectiveSj = sjId ?? current?.id ?? null;
+  const jaar = (schooljaren ?? []).find((s) => s.id === effectiveSj) ?? null;
+
+  const { data: classes } = useClasses(effectiveSj);
+  const generate = useGenerateLesweken();
+  const [start, setStart] = useState("");
+  const [end, setEnd] = useState("");
+  const [result, setResult] = useState<GenerateWeeksResult | null>(null);
+
+  // Datums volgen het gekozen schooljaar zodra dat (of de keuze) verandert.
+  useEffect(() => {
+    setStart(jaar?.start_date ?? "");
+    setEnd(jaar?.end_date ?? "");
+    setResult(null);
+  }, [jaar?.id, jaar?.start_date, jaar?.end_date]);
+
+  const actief = (classes ?? []).filter((c) => !c.historic && !c.is_next);
+  const zonderDag = actief.filter((c) => !c.day);
+
+  // Ruwe schatting vooraf, zodat je weet wat de knop gaat doen.
+  const weken = start && end && start <= end
+    ? Math.floor((new Date(end + "T00:00:00").getTime() - new Date(start + "T00:00:00").getTime()) / (7 * 864e5)) + 1
+    : 0;
+
+  const run = async () => {
+    if (!effectiveSj) return;
+    const aantal = weken * (actief.length - zonderDag.length);
+    if (!confirm(
+      `Lesweken aanmaken voor schooljaar ${jaar?.name ?? ""}?\n\n`
+      + `${weken} weken × ${actief.length - zonderDag.length} klas(sen) ≈ ${aantal} lessen.\n\n`
+      + "Elke les krijgt type 'Les'; vrije weken en activiteiten pas je daarna aan "
+      + "in Planning → Docentenrooster. Bestaande lessen blijven ongemoeid.",
+    )) return;
+    try {
+      const r = await generate.mutateAsync({ schooljaarId: effectiveSj, start, end });
+      setResult(r);
+      toast(r.created ? `${r.created} les(sen) aangemaakt` : "Alle weken stonden er al");
+    } catch (e) { toast("Aanmaken mislukt: " + (e instanceof Error ? e.message : "")); }
+  };
+
+  return (
+    <div className="flex-col gap-4">
+      <Card title="Lesweken genereren" sub="Zet in één keer alle weken van een schooljaar klaar als les, per klas op zijn eigen lesdag.">
+        <div className="grid-3" style={{ gridTemplateColumns: "1fr 1fr 1fr" }}>
+          <Field label="Schooljaar">
+            <Select value={effectiveSj ?? ""} onChange={(e) => setSjId(e.target.value)}>
+              {(schooljaren ?? []).map((s) => <option key={s.id} value={s.id}>{s.name}{s.is_current ? " (huidig)" : ""}</option>)}
+            </Select>
+          </Field>
+          <Field label="Eerste lesdag"><input className="input" type="date" value={start} onChange={(e) => setStart(e.target.value)} /></Field>
+          <Field label="Laatste lesdag"><input className="input" type="date" value={end} onChange={(e) => setEnd(e.target.value)} /></Field>
+        </div>
+
+        <div className="text-sm text-muted mt-2">
+          {!start || !end ? "Kies een begin- en einddatum." : start > end ? (
+            <span style={{ color: "var(--danger)" }}>De einddatum ligt vóór de begindatum.</span>
+          ) : (
+            <>Dit maakt <b>{weken}</b> {weken === 1 ? "week" : "weken"} aan voor <b>{actief.length - zonderDag.length}</b> klas(sen).</>
+          )}
+        </div>
+
+        {zonderDag.length > 0 && (
+          <div className="text-sm mt-2" style={{ padding: "10px 12px", background: "var(--warn-soft)", color: "var(--warn)", borderRadius: 8 }}>
+            Zonder lesdag, dus overgeslagen: {zonderDag.map((c) => c.code).join(", ")}. Vul de lesdag in bij Klassen.
+          </div>
+        )}
+
+        <div className="flex justify-end mt-3">
+          <Btn kind="primary" icon="plus" disabled={!effectiveSj || !start || !end || start > end || generate.isPending} onClick={run}>
+            {generate.isPending ? "Bezig…" : "Lesweken aanmaken"}
+          </Btn>
+        </div>
+
+        {result && (
+          <div className="text-sm mt-3" style={{ padding: "10px 12px", background: "var(--success-soft)", color: "var(--success)", borderRadius: 8 }}>
+            {result.created} les(sen) aangemaakt over {result.weeks} weken
+            {result.skipped > 0 && <> · {result.skipped} overgeslagen (stonden er al)</>}.
+          </div>
+        )}
+
+        <div className="text-xs text-subtle mt-3">
+          De begin- en einddatum worden op het schooljaar opgeslagen. Nogmaals draaien vult
+          alleen de ontbrekende weken aan; bestaande lessen en hun docenten blijven staan.
+        </div>
       </Card>
     </div>
   );
