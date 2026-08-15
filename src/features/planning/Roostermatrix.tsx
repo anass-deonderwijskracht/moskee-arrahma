@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Card, Btn, Badge, Select } from "@/components/ui";
+import { Card, Btn, Badge, Icon, Select } from "@/components/ui";
 import { Modal, Field, ModalFooter } from "@/components/ui/Modal";
 import { Loading, ErrorState } from "@/features/_shared/states";
 import { useToast } from "@/components/chrome/Toast";
@@ -132,6 +132,20 @@ export function Roostermatrix() {
   const toggleWeek = (wk: number) => setSelectedWeeks((prev) => {
     const n = new Set(prev); n.has(wk) ? n.delete(wk) : n.add(wk); return n;
   });
+
+  // Klik op een kolomkop: die klas als enige selecteren, met alle weken erbij,
+  // zodat de bulk-acties precies die hele kolom raken. Nog een klik zet alles
+  // weer terug — anders zit je vast in één kolom.
+  const selectColumn = (id: string) => {
+    const isolated = selected.size === 1 && selected.has(id);
+    if (isolated) {
+      setSelected(new Set(classes.map((c) => c.id)));
+      setSelectedWeeks(new Set());
+    } else {
+      setSelected(new Set([id]));
+      setSelectedWeeks(new Set(weeks.map((w) => w.week_nr)));
+    }
+  };
 
   // Week whose date is closest to today.
   const currentWeek = useMemo(() => {
@@ -319,11 +333,21 @@ export function Roostermatrix() {
                       Lesweek
                     </label>
                   </th>
-                  {visibleClasses.map((c) => (
-                    <th key={c.id} style={{ minWidth: 128, whiteSpace: "nowrap" }}>
-                      {c.code} {c.track === "hifdh" && <Badge kind="primary">H</Badge>}
-                    </th>
-                  ))}
+                  {visibleClasses.map((c) => {
+                    const isolated = selected.size === 1 && selected.has(c.id);
+                    return (
+                      <th key={c.id} onClick={() => selectColumn(c.id)}
+                        title={isolated ? "Klik om alle klassen weer te tonen" : `Alleen ${c.code} selecteren — hele kolom`}
+                        style={{
+                          minWidth: 128, whiteSpace: "nowrap", cursor: "pointer", userSelect: "none",
+                          background: isolated ? "var(--primary-soft)" : undefined,
+                          color: isolated ? "var(--primary)" : undefined,
+                        }}>
+                        {c.code} {c.track === "hifdh" && <Badge kind="primary">H</Badge>}
+                        {isolated && <Icon name="check" size={11} style={{ marginLeft: 4 }} />}
+                      </th>
+                    );
+                  })}
                 </tr>
               </thead>
               <tbody>

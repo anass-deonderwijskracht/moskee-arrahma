@@ -168,6 +168,21 @@ export function useDeleteIntakeMoment() {
   });
 }
 
+/** Verwijdert alleen de opgeslagen voorkeur; de inschrijving en link blijven bestaan. */
+export function useDeleteIntakeChoice() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("intake_choices").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["intake-moments"] });
+      qc.invalidateQueries({ queryKey: ["active-intake-overview"] });
+    },
+  });
+}
+
 export function useActiveIntakeOverview() {
   return useQuery({
     queryKey: ["active-intake-overview"],

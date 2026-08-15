@@ -5,6 +5,7 @@ import { useToast } from "@/components/chrome/Toast";
 import { ErrorState, Loading } from "@/features/_shared/states";
 import {
   useDeleteIntakeMoment,
+  useDeleteIntakeChoice,
   FIXED_INTAKE_END,
   FIXED_INTAKE_START,
   useIntakeMoments,
@@ -49,6 +50,7 @@ export function IntakesScreen() {
   const { data, isLoading, isError, error } = useIntakeMoments();
   const setStatus = useSetIntakeStatus();
   const remove = useDeleteIntakeMoment();
+  const removeChoice = useDeleteIntakeChoice();
   const [editing, setEditing] = useState<Partial<IntakeMoment> | null>(null);
 
   if (isError) return <ErrorState error={error} />;
@@ -75,6 +77,17 @@ export function IntakesScreen() {
       toast("Intakemoment verwijderd");
     } catch (err) {
       toast("Verwijderen mislukt: " + (err instanceof Error ? err.message : "onbekend"));
+    }
+  };
+
+  const deleteChoice = async (choice: IntakeMoment["intake_choices"][number]) => {
+    const name = choice.enrollments?.child_name ?? "deze inschrijving";
+    if (!confirm(`Intakekeuze van ${name} verwijderen? De persoonlijke link blijft werken en toont daarna opnieuw het keuzeformulier.`)) return;
+    try {
+      await removeChoice.mutateAsync(choice.id);
+      toast(`Intakekeuze van ${name} verwijderd`);
+    } catch (err) {
+      toast("Keuze verwijderen mislukt: " + (err instanceof Error ? err.message : "onbekend"));
     }
   };
 
@@ -177,7 +190,7 @@ export function IntakesScreen() {
                 </div>
                 <div className="scroll-x">
                   <table className="table" style={{ minWidth: 680 }}>
-                    <thead><tr><th>Inschrijving</th><th>Gekozen moment</th><th>Gekozen / gewijzigd op</th></tr></thead>
+                    <thead><tr><th>Inschrijving</th><th>Gekozen moment</th><th>Gekozen / gewijzigd op</th><th style={{ width: 1 }}></th></tr></thead>
                     <tbody>
                       {moment.intake_choices.map((choice) => {
                         const slot = choice.intake_slot_id ? slotById.get(choice.intake_slot_id) : undefined;
@@ -188,10 +201,11 @@ export function IntakesScreen() {
                               ? `${dateLabel(slot.date)} · ${timeLabel(slot.start_time)} – ${timeLabel(slot.end_time)}`
                               : choice.other_text ? `Anders: ${choice.other_text}` : "—"}</td>
                             <td className="text-subtle">{dateTimeLabel(choice.updated_at)}</td>
+                            <td><Btn size="sm" kind="danger" icon="trash" disabled={removeChoice.isPending} onClick={() => void deleteChoice(choice)}>Verwijderen</Btn></td>
                           </tr>
                         );
                       })}
-                      {moment.intake_choices.length === 0 && <tr><td colSpan={3}><div className="empty">Nog geen keuzes ontvangen.</div></td></tr>}
+                      {moment.intake_choices.length === 0 && <tr><td colSpan={4}><div className="empty">Nog geen keuzes ontvangen.</div></td></tr>}
                     </tbody>
                   </table>
                 </div>

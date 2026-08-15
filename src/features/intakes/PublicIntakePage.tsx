@@ -141,7 +141,7 @@ export function PublicIntakePage() {
               {choosingOther && (
                 <div className="public-intake-other-field">
                   <label htmlFor="other-moment">Welke dag of welk tijdstip komt beter uit?</label>
-                  <textarea id="other-moment" rows={3} maxLength={500} value={otherText} onChange={(event) => setOtherText(event.target.value)} placeholder="Bijvoorbeeld: woensdagmiddag na 15:00" />
+                  <textarea id="other-moment" rows={3} maxLength={500} value={otherText} onChange={(event) => setOtherText(event.target.value)} />
                   <span>{otherText.length}/500</span>
                 </div>
               )}
