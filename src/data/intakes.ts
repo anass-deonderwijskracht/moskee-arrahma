@@ -2,6 +2,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import type { Tables } from "@/types/database";
 
+export const FIXED_INTAKE_START = "09:00";
+export const FIXED_INTAKE_END = "12:00";
+
 export type IntakeStatus = "concept" | "actief" | "verlopen";
 export type IntakeSlot = Tables<"intake_slots">;
 export type IntakeChoice = Tables<"intake_choices"> & {
@@ -106,8 +109,8 @@ export function useSaveIntakeMoment() {
         id: slot.id ?? crypto.randomUUID(),
         intake_moment_id: momentId!,
         date: slot.date,
-        start_time: slot.start_time,
-        end_time: slot.end_time,
+        start_time: FIXED_INTAKE_START,
+        end_time: FIXED_INTAKE_END,
         position,
       }));
 

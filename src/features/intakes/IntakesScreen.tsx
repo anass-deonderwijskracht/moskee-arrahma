@@ -5,6 +5,8 @@ import { useToast } from "@/components/chrome/Toast";
 import { ErrorState, Loading } from "@/features/_shared/states";
 import {
   useDeleteIntakeMoment,
+  FIXED_INTAKE_END,
+  FIXED_INTAKE_START,
   useIntakeMoments,
   useSaveIntakeMoment,
   useSetIntakeStatus,
@@ -39,7 +41,7 @@ function dateTimeLabel(value: string) {
 
 function emptySlot(position: number, date?: string): IntakeSlotInput {
   const tomorrow = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10);
-  return { date: date ?? tomorrow, start_time: "10:00", end_time: "10:30", position };
+  return { date: date ?? tomorrow, start_time: FIXED_INTAKE_START, end_time: FIXED_INTAKE_END, position };
 }
 
 export function IntakesScreen() {
@@ -193,7 +195,12 @@ function IntakeMomentModal({ initial, onClose }: { initial: Partial<IntakeMoment
   const [status, setStatus] = useState<IntakeStatus>((initial.status as IntakeStatus | undefined) ?? "concept");
   const [slots, setSlots] = useState<IntakeSlotInput[]>(() =>
     initial.intake_slots?.length
-      ? initial.intake_slots.map((slot, position) => ({ ...slot, position }))
+      ? initial.intake_slots.map((slot, position) => ({
+          ...slot,
+          start_time: FIXED_INTAKE_START,
+          end_time: FIXED_INTAKE_END,
+          position,
+        }))
       : [emptySlot(0)],
   );
   const selectedSlotIds = useMemo(() => new Set((initial.intake_choices ?? []).map((choice) => choice.intake_slot_id)), [initial.intake_choices]);
@@ -212,7 +219,7 @@ function IntakeMomentModal({ initial, onClose }: { initial: Partial<IntakeMoment
   };
 
   const valid = description.trim() && duration.trim() && slots.length > 0
-    && slots.every((slot) => slot.date && slot.start_time && slot.end_time && slot.end_time > slot.start_time);
+    && slots.every((slot) => slot.date);
 
   const onSave = async () => {
     if (!valid) return;
@@ -258,7 +265,7 @@ function IntakeMomentModal({ initial, onClose }: { initial: Partial<IntakeMoment
       <div className="flex items-center justify-between mt-2">
         <div>
           <div className="font-semibold text-sm">Datum- en tijdopties</div>
-          <div className="text-xs text-subtle">Eindtijd moet na de begintijd liggen.</div>
+          <div className="text-xs text-subtle">De vaste intaketijd is altijd 09:00 – 12:00.</div>
         </div>
         <Btn size="sm" icon="plus" onClick={() => setSlots((current) => [...current, emptySlot(current.length, current.at(-1)?.date)])}>Datum toevoegen</Btn>
       </div>
@@ -267,14 +274,11 @@ function IntakeMomentModal({ initial, onClose }: { initial: Partial<IntakeMoment
         {slots.map((slot, index) => (
           <div className="intake-slot-editor" key={slot.id ?? index}>
             <input className="input" type="date" aria-label={`Datum ${index + 1}`} value={slot.date} onChange={(event) => patchSlot(index, { date: event.target.value })} />
-            <input className="input" type="time" aria-label={`Begintijd ${index + 1}`} value={timeLabel(slot.start_time)} onChange={(event) => patchSlot(index, { start_time: event.target.value })} />
-            <span className="text-subtle">tot</span>
-            <input className="input" type="time" aria-label={`Eindtijd ${index + 1}`} value={timeLabel(slot.end_time)} onChange={(event) => patchSlot(index, { end_time: event.target.value })} />
+            <div className="intake-slot-fixed-time"><Icon name="clock" size={15} /> 09:00 – 12:00</div>
             <Btn kind="ghost" icon="trash" aria-label={`Optie ${index + 1} verwijderen`} title={slot.id && selectedSlotIds.has(slot.id) ? "Deze optie is al gekozen" : "Optie verwijderen"} disabled={!!slot.id && selectedSlotIds.has(slot.id)} onClick={() => removeSlot(index)} />
           </div>
         ))}
         {slots.length === 0 && <div className="error-banner">Voeg minimaal één datum en tijd toe.</div>}
-        {slots.some((slot) => slot.end_time <= slot.start_time) && <div className="error-banner">Controleer de tijden: elke eindtijd moet na de begintijd liggen.</div>}
       </div>
       {status === "actief" && <div className="intake-active-note"><Icon name="check" size={14} /> Dit moment wordt het enige actieve intakeformulier. Een eerder actief moment verloopt automatisch.</div>}
     </Modal>

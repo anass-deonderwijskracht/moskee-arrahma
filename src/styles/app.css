@@ -152,13 +152,26 @@
 .intake-responses-head { display: flex; align-items: center; justify-content: space-between; padding-top: 17px; margin-bottom: 8px; border-top: 1px solid var(--border); }
 .intake-slot-editor {
   display: grid;
-  grid-template-columns: minmax(170px, 1.35fr) minmax(115px, 0.8fr) auto minmax(115px, 0.8fr) auto;
+  grid-template-columns: minmax(190px, 1fr) minmax(170px, 1fr) auto;
   gap: 8px;
   align-items: center;
   padding: 10px;
   border: 1px solid var(--border);
   border-radius: 10px;
   background: var(--bg-sunken);
+}
+.intake-slot-fixed-time {
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-elev);
+  color: var(--fg-muted);
+  font-size: 13px;
+  font-weight: 600;
 }
 .intake-active-note { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 8px; color: var(--success); background: var(--success-soft); font-size: 12.5px; }
 .intake-enrollment-cell { min-width: 170px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
@@ -241,9 +254,8 @@
   .intake-summary > div:first-child { grid-column: 1 / -1; }
   .intake-slot-admin { grid-template-columns: 1fr auto; }
   .intake-slot-names { grid-column: 1 / -1; white-space: normal; }
-  .intake-slot-editor { grid-template-columns: 1fr 1fr auto; }
+  .intake-slot-editor { grid-template-columns: 1fr auto; }
   .intake-slot-editor > input:first-child { grid-column: 1 / -1; }
-  .intake-slot-editor > span { display: none; }
   .public-intake-page { padding: 18px 12px; }
   .public-intake-brand { margin-bottom: 14px; }
   .public-intake-card { border-radius: 17px; }
