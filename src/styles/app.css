@@ -111,3 +111,147 @@
 
 /* --- Dropdown menu --- */
 .menu { position: absolute; top: calc(100% + 4px); right: 0; background: var(--bg-elev); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow-lg); padding: 6px; min-width: 240px; z-index: 20; }
+
+/* --- Intakebeheer -------------------------------------------------------- */
+.intake-summary {
+  display: grid;
+  grid-template-columns: minmax(280px, 1fr) 180px 120px;
+  gap: 14px;
+  align-items: stretch;
+  margin-bottom: 18px;
+}
+.intake-kicker { text-transform: uppercase; letter-spacing: 0.055em; margin-bottom: 5px; }
+.intake-description { white-space: pre-wrap; max-width: 760px; line-height: 1.65; }
+.intake-meta-card {
+  background: var(--bg-sunken);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+}
+.intake-meta-card strong { font-size: 16px; }
+.intake-slot-list { display: flex; flex-direction: column; gap: 8px; margin: 6px 0 22px; }
+.intake-slot-admin {
+  display: grid;
+  grid-template-columns: minmax(280px, 1fr) 100px minmax(220px, 1fr);
+  align-items: center;
+  gap: 14px;
+  padding: 11px 13px;
+  background: var(--bg-sunken);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.intake-slot-date { display: flex; align-items: center; gap: 10px; }
+.intake-slot-date > div { display: flex; flex-direction: column; }
+.intake-slot-date strong { font-size: 13px; text-transform: capitalize; }
+.intake-slot-date span, .intake-slot-names { font-size: 12px; color: var(--fg-subtle); }
+.intake-slot-names { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.intake-responses-head { display: flex; align-items: center; justify-content: space-between; padding-top: 17px; margin-bottom: 8px; border-top: 1px solid var(--border); }
+.intake-slot-editor {
+  display: grid;
+  grid-template-columns: minmax(170px, 1.35fr) minmax(115px, 0.8fr) auto minmax(115px, 0.8fr) auto;
+  gap: 8px;
+  align-items: center;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-sunken);
+}
+.intake-active-note { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 8px; color: var(--success); background: var(--success-soft); font-size: 12.5px; }
+.intake-enrollment-cell { min-width: 170px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.scroll-x { overflow-x: auto; }
+
+/* --- Publiek persoonlijk intakeformulier -------------------------------- */
+.sr-only {
+  position: absolute !important;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0, 0, 0, 0);
+  white-space: nowrap; border: 0;
+}
+.public-intake-page {
+  --public-petrol: #0c555b;
+  --public-petrol-dark: #073b40;
+  --public-copper: #b7773e;
+  min-height: 100vh;
+  min-height: 100dvh;
+  position: relative;
+  overflow: hidden;
+  padding: 34px 20px;
+  background: linear-gradient(155deg, #f7f5ee 0%, #edf4f2 52%, #f5f0e9 100%);
+  color: #183235;
+}
+.public-intake-glow { position: fixed; border-radius: 999px; filter: blur(2px); pointer-events: none; }
+.public-intake-glow-one { width: 430px; height: 430px; right: -160px; top: -190px; background: rgb(12 85 91 / 0.09); }
+.public-intake-glow-two { width: 330px; height: 330px; left: -150px; bottom: -170px; background: rgb(183 119 62 / 0.09); }
+.public-intake-shell { width: min(100%, 760px); margin: 0 auto; position: relative; z-index: 1; }
+.public-intake-brand { display: flex; align-items: center; gap: 12px; margin: 0 4px 20px; }
+.public-intake-brand img { width: 46px; height: 46px; object-fit: contain; border-radius: 12px; background: white; box-shadow: 0 6px 20px rgb(7 59 64 / 0.10); }
+.public-intake-brand div { display: flex; flex-direction: column; }
+.public-intake-brand strong { color: var(--public-petrol-dark); font-size: 15px; letter-spacing: -0.01em; }
+.public-intake-brand span { color: #6d7f7f; font-size: 11.5px; }
+.public-intake-card { background: rgb(255 255 255 / 0.93); border: 1px solid rgb(12 85 91 / 0.12); border-radius: 22px; box-shadow: 0 28px 70px -32px rgb(7 59 64 / 0.30); overflow: hidden; backdrop-filter: blur(12px); }
+.public-intake-head { padding: 38px 40px 32px; border-bottom: 1px solid #e5ecea; background: linear-gradient(145deg, rgb(12 85 91 / 0.055), transparent 65%); }
+.public-intake-eyebrow { color: var(--public-copper); font-size: 11.5px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; margin-bottom: 9px; }
+.public-intake-head h1, .public-intake-confirm h1, .public-intake-state h1 { margin: 0; color: var(--public-petrol-dark); font-size: clamp(25px, 5vw, 34px); line-height: 1.18; letter-spacing: -0.035em; }
+.public-intake-description { white-space: pre-wrap; color: #516869; font-size: 15px; line-height: 1.7; margin: 15px 0 18px; max-width: 650px; }
+.public-intake-duration { display: inline-flex; align-items: center; gap: 7px; color: var(--public-petrol); background: #e8f2f0; border-radius: 999px; padding: 7px 11px; font-size: 12.5px; font-weight: 600; }
+.public-intake-form { padding: 30px 40px 38px; }
+.public-intake-form-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; margin-bottom: 18px; }
+.public-intake-form-head h2 { font-size: 18px; color: var(--public-petrol-dark); letter-spacing: -0.02em; margin: 0 0 4px; }
+.public-intake-form-head p { color: #708181; font-size: 13px; margin: 0; }
+.public-intake-form-head > span { flex-shrink: 0; color: #6e7d7e; background: #f0f3f2; border-radius: 999px; padding: 5px 9px; font-size: 11.5px; font-weight: 600; }
+.public-intake-options { border: 0; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 9px; }
+.public-intake-option { position: relative; display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 13px; min-height: 72px; padding: 13px 16px; border: 1px solid #dce6e4; border-radius: 13px; background: #fff; cursor: pointer; transition: border-color 0.15s, box-shadow 0.15s, background 0.15s, transform 0.15s; }
+.public-intake-option:hover { border-color: rgb(12 85 91 / 0.45); transform: translateY(-1px); box-shadow: 0 8px 22px -18px rgb(7 59 64 / 0.45); }
+.public-intake-option.selected { border-color: var(--public-petrol); background: #f1f8f6; box-shadow: 0 0 0 2px rgb(12 85 91 / 0.10); }
+.public-intake-option > input { position: absolute; opacity: 0; pointer-events: none; }
+.public-intake-radio { width: 23px; height: 23px; display: grid; place-items: center; border-radius: 50%; border: 1.5px solid #aebdbc; color: transparent; background: white; transition: all 0.15s; }
+.public-intake-option.selected .public-intake-radio { background: var(--public-petrol); border-color: var(--public-petrol); color: white; }
+.public-intake-option-date { display: flex; flex-direction: column; min-width: 0; }
+.public-intake-option-date strong { color: #213d3f; font-size: 14px; text-transform: capitalize; }
+.public-intake-option-date span { color: #738384; font-size: 13px; margin-top: 1px; }
+.public-intake-chevron { color: #a3b1b0; }
+.public-intake-option.selected .public-intake-chevron { color: var(--public-petrol); }
+.public-intake-actions { display: flex; justify-content: flex-end; align-items: center; gap: 10px; margin-top: 24px; }
+.public-intake-submit, .public-intake-secondary { min-height: 46px; border-radius: 10px; padding: 10px 17px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font: inherit; font-size: 13.5px; font-weight: 650; cursor: pointer; transition: background 0.15s, transform 0.15s, opacity 0.15s; }
+.public-intake-submit { color: white; background: var(--public-petrol); box-shadow: 0 8px 20px -12px rgb(7 59 64 / 0.65); }
+.public-intake-submit:hover:not(:disabled) { background: var(--public-petrol-dark); transform: translateY(-1px); }
+.public-intake-submit:disabled { opacity: 0.48; cursor: not-allowed; }
+.public-intake-secondary { color: var(--public-petrol); background: transparent; border: 1px solid rgb(12 85 91 / 0.24); }
+.public-intake-secondary:hover { background: #eff6f4; }
+.public-intake-error { margin-top: 13px; padding: 10px 12px; color: #8e3b31; background: #faefed; border-radius: 9px; font-size: 13px; }
+.public-intake-confirm, .public-intake-state { padding: 54px 42px; text-align: center; display: flex; flex-direction: column; align-items: center; }
+.public-intake-confirm > p, .public-intake-state > p { color: #657879; max-width: 500px; font-size: 14.5px; line-height: 1.65; margin: 12px auto 24px; }
+.public-intake-check, .public-intake-state-icon { width: 62px; height: 62px; border-radius: 50%; display: grid; place-items: center; margin-bottom: 21px; }
+.public-intake-check { color: white; background: var(--public-petrol); box-shadow: 0 12px 28px -14px rgb(7 59 64 / 0.65); }
+.public-intake-state-icon { color: var(--public-petrol); background: #e8f2f0; }
+.public-intake-confirm-slot { width: min(100%, 500px); display: flex; align-items: center; gap: 13px; text-align: left; padding: 17px 18px; margin-bottom: 13px; background: #f3f8f7; border: 1px solid #d9e7e4; border-radius: 13px; color: var(--public-petrol); }
+.public-intake-confirm-slot > div { display: flex; flex-direction: column; }
+.public-intake-confirm-slot span { color: #758687; font-size: 11.5px; }
+.public-intake-confirm-slot strong { color: #213d3f; font-size: 14px; text-transform: capitalize; }
+.public-intake-confirm .public-intake-secondary { margin-top: 25px; }
+.public-intake-shell > footer { color: #82908f; text-align: center; font-size: 11.5px; margin: 16px 0 0; }
+
+@media (max-width: 700px) {
+  .intake-summary { grid-template-columns: 1fr 1fr; }
+  .intake-summary > div:first-child { grid-column: 1 / -1; }
+  .intake-slot-admin { grid-template-columns: 1fr auto; }
+  .intake-slot-names { grid-column: 1 / -1; white-space: normal; }
+  .intake-slot-editor { grid-template-columns: 1fr 1fr auto; }
+  .intake-slot-editor > input:first-child { grid-column: 1 / -1; }
+  .intake-slot-editor > span { display: none; }
+  .public-intake-page { padding: 18px 12px; }
+  .public-intake-brand { margin-bottom: 14px; }
+  .public-intake-card { border-radius: 17px; }
+  .public-intake-head { padding: 29px 22px 25px; }
+  .public-intake-form { padding: 24px 22px 28px; }
+  .public-intake-form-head { flex-direction: column; gap: 8px; }
+  .public-intake-option { min-height: 78px; padding: 13px; }
+  .public-intake-actions { flex-direction: column-reverse; }
+  .public-intake-actions > button { width: 100%; }
+  .public-intake-confirm, .public-intake-state { padding: 42px 22px; }
+}

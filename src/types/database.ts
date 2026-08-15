@@ -218,9 +218,37 @@ export interface Database {
           status: string; target_class: string | null; submitted_at: string | null;
           submitted_label: string | null; rejection_reason: string | null; preferred_lesday: string | null;
           address: string | null; notes: string | null; birthdate: string | null; twijfel: boolean;
+          intake_access_token: string;
         } & Timestamps;
         Insert: { child_name: string } & Partial<Database["public"]["Tables"]["enrollments"]["Row"]>;
         Update: Partial<Database["public"]["Tables"]["enrollments"]["Row"]>;
+        Relationships: [];
+      };
+      intake_moments: {
+        Row: {
+          id: string; description: string; duration_text: string;
+          status: string; created_at: string; updated_at: string;
+        };
+        Insert: { description: string; duration_text: string } & Partial<Database["public"]["Tables"]["intake_moments"]["Row"]>;
+        Update: Partial<Database["public"]["Tables"]["intake_moments"]["Row"]>;
+        Relationships: [];
+      };
+      intake_slots: {
+        Row: {
+          id: string; intake_moment_id: string; date: string; start_time: string;
+          end_time: string; position: number; created_at: string;
+        };
+        Insert: { intake_moment_id: string; date: string; start_time: string; end_time: string } & Partial<Database["public"]["Tables"]["intake_slots"]["Row"]>;
+        Update: Partial<Database["public"]["Tables"]["intake_slots"]["Row"]>;
+        Relationships: [];
+      };
+      intake_choices: {
+        Row: {
+          id: string; intake_moment_id: string; intake_slot_id: string; enrollment_id: string;
+          chosen_at: string; updated_at: string;
+        };
+        Insert: { intake_moment_id: string; intake_slot_id: string; enrollment_id: string } & Partial<Database["public"]["Tables"]["intake_choices"]["Row"]>;
+        Update: Partial<Database["public"]["Tables"]["intake_choices"]["Row"]>;
         Relationships: [];
       };
       enrollment_parents: {
@@ -317,7 +345,9 @@ export interface Database {
     };
     Functions: {
       finalize_enrollment: { Args: { p_placement_id: string }; Returns: string };
+      get_public_intake: { Args: { p_token: string }; Returns: Json };
       is_admin: { Args: Record<string, never>; Returns: boolean };
+      submit_public_intake: { Args: { p_token: string; p_slot_id: string }; Returns: Json };
     };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;

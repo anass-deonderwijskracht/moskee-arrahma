@@ -19,6 +19,7 @@ import { TeacherDetail } from "@/features/teachers/TeacherDetail";
 import { TasksBoard } from "@/features/tasks/TasksBoard";
 import { StudentsList } from "@/features/students/StudentsList";
 import { ClassesList } from "@/features/classes/ClassesList";
+import { PublicIntakePage } from "@/features/intakes/PublicIntakePage";
 
 // De zwaarste schermen apart laden, zodat de eerste lading op een mobiel
 // netwerk niet de hele app hoeft binnen te halen.
@@ -29,6 +30,7 @@ const FinanceScreen = lazy(() => import("@/features/finance/FinanceScreen").then
 const PlanningScreen = lazy(() => import("@/features/planning/PlanningScreen").then((m) => ({ default: m.PlanningScreen })));
 const SettingsScreen = lazy(() => import("@/features/settings/SettingsScreen").then((m) => ({ default: m.SettingsScreen })));
 const AdminToetsen = lazy(() => import("@/features/admin-tests/AdminToetsen").then((m) => ({ default: m.AdminToetsen })));
+const IntakesScreen = lazy(() => import("@/features/intakes/IntakesScreen").then((m) => ({ default: m.IntakesScreen })));
 
 export function App() {
   return (
@@ -38,6 +40,7 @@ export function App() {
           <Routes>
             <Route path="/login" element={<LoginPage />} />
             <Route path="/wachtwoord-herstellen" element={<ResetPasswordPage />} />
+            <Route path="/intake/:token" element={<PublicIntakePage />} />
             <Route element={<ProtectedRoute />}>
               <Route element={<AppShell />}>
                 {/* Accessible to admins and to the docent of that class (RLS-scoped). */}
@@ -58,6 +61,7 @@ export function App() {
                   <Route path="/students" element={<StudentsList />} />
                   <Route path="/classes" element={<ClassesList />} />
                   <Route path="/enrollments" element={<EnrollmentsScreen />} />
+                  <Route path="/intakes" element={<IntakesScreen />} />
                   <Route path="/admin-toetsen" element={<AdminToetsen />} />
                   <Route path="/finance" element={<FinanceScreen />} />
                   <Route path="/settings" element={<SettingsScreen />} />

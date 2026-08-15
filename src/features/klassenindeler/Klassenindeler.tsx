@@ -9,9 +9,10 @@ import { useSetLesgeldOverride } from "@/data/tuition";
 import { ENROLL_COLUMNS } from "@/data/dashboard";
 import { age, ageLabel } from "@/data/age";
 import { EnrollmentSheet } from "@/features/enrollments/EnrollmentSheet";
+import { useActiveIntakeOverview, type ActiveIntakeSelection } from "@/data/intakes";
 
 type Track = "all" | "regulier" | "hifdh";
-type SortKey = "date" | "name" | "status" | "lesday" | "age" | "klas" | "niveau" | "lesgeld";
+type SortKey = "date" | "name" | "status" | "lesday" | "age" | "intake" | "klas" | "niveau" | "lesgeld";
 const STATUS_TITLE: Record<string, string> = Object.fromEntries(ENROLL_COLUMNS.map((c) => [c.id, c.title]));
 const STATUS_KIND: Record<string, BadgeKind> = {
   herinschrijving: "primary", wachtlijst: "warn", intake: "accent", toegezegd: "info", definitief: "success", afgewezen: "danger",
@@ -52,6 +53,7 @@ export function Klassenindeler({ enrollments }: { enrollments: Enrollment[] }) {
 
   const { data: classes, isLoading: classesLoading } = useClasses(effectiveSj);
   const { data: placements } = usePlacements(effectiveSj);
+  const { data: activeIntake } = useActiveIntakeOverview();
   const upsert = useUpsertPlacement();
   const finalize = useFinalizeEnrollment();
   const updateLeerling = useUpdateFinalizedLeerling();
@@ -75,6 +77,11 @@ export function Klassenindeler({ enrollments }: { enrollments: Enrollment[] }) {
   };
 
   const pmap = placements ?? {};
+  const intakeByEnrollment = useMemo(() => {
+    const map: Record<string, ActiveIntakeSelection> = {};
+    for (const choice of activeIntake?.intake_choices ?? []) map[choice.enrollment_id] = choice;
+    return map;
+  }, [activeIntake]);
   // Eén op naam gesorteerde lijst voor zowel de tegels als de keuzelijst per rij.
   const sortedClasses = useMemo(() => [...(classes ?? [])].sort(byCode), [classes]);
   const klassen = useMemo(() => sortedClasses.filter((c) => track === "all" || c.track === track), [sortedClasses, track]);
@@ -100,6 +107,7 @@ export function Klassenindeler({ enrollments }: { enrollments: Enrollment[] }) {
         case "status": return STATUS_ORDER[e.status] ?? 99;
         case "lesday": return e.preferred_lesday ?? "";
         case "age": return age(e) ?? -1;
+        case "intake": return intakeByEnrollment[e.id]?.updated_at ?? "";
         case "klas": return p?.class_id ? (classCode[p.class_id] ?? "") : "";
         case "niveau": return p?.niveau ?? "";
         case "lesgeld": return p?.lesgeld_bedrag != null ? Number(p.lesgeld_bedrag) : -1;
@@ -112,7 +120,7 @@ export function Klassenindeler({ enrollments }: { enrollments: Enrollment[] }) {
       const cmp = typeof va === "number" && typeof vb === "number" ? va - vb : String(va).localeCompare(String(vb));
       return (cmp !== 0 ? cmp : a.id.localeCompare(b.id)) * dir;
     });
-  }, [enrollments, track, statuses, onlyTwijfel, classFilter, sort, pmap, classCode]);
+  }, [enrollments, track, statuses, onlyTwijfel, classFilter, sort, pmap, classCode, intakeByEnrollment]);
 
   // Telt binnen het gekozen traject, zodat het getal bij de chip klopt met de lijst.
   const twijfelCount = useMemo(
@@ -165,6 +173,25 @@ export function Klassenindeler({ enrollments }: { enrollments: Enrollment[] }) {
     if (next.has(id)) next.delete(id); else next.add(id);
     return next.size === 0 ? new Set([id]) : next; // never empty
   });
+
+  const copyIntakeLink = async (enrollment: Enrollment) => {
+    if (!activeIntake || !enrollment.intake_access_token) return;
+    const link = `${window.location.origin}/intake/${enrollment.intake_access_token}`;
+    try {
+      await navigator.clipboard.writeText(link);
+      toast(`Persoonlijke intakelink voor ${enrollment.child_name} gekopieerd`);
+    } catch {
+      const input = document.createElement("textarea");
+      input.value = link;
+      input.style.position = "fixed";
+      input.style.opacity = "0";
+      document.body.appendChild(input);
+      input.select();
+      const copied = document.execCommand("copy");
+      input.remove();
+      toast(copied ? `Persoonlijke intakelink voor ${enrollment.child_name} gekopieerd` : "Kopiëren is niet gelukt");
+    }
+  };
 
   const trackPills: Option<Track>[] = [
     { value: "all", label: "Beide" },
@@ -267,12 +294,13 @@ export function Klassenindeler({ enrollments }: { enrollments: Enrollment[] }) {
             </button>
           )}
         </div>
-        <table className="table" style={{ minWidth: 1100 }}>
+        <table className="table" style={{ minWidth: 1300 }}>
           <thead><tr>
             <Th label="Inschrijving" k="date" sort={sort} onSort={toggleSort} />
             <Th label="Status" k="status" sort={sort} onSort={toggleSort} />
             <Th label="Voorkeur lesdag" k="lesday" sort={sort} onSort={toggleSort} />
             <Th label="Leeftijd" k="age" sort={sort} onSort={toggleSort} />
+            <Th label="Intake" k="intake" sort={sort} onSort={toggleSort} />
             <Th label="Klas" k="klas" sort={sort} onSort={toggleSort} />
             <Th label="Niveau" k="niveau" sort={sort} onSort={toggleSort} />
             <Th label="Lesgeld betaald" k="lesgeld" sort={sort} onSort={toggleSort} />
@@ -298,6 +326,20 @@ export function Klassenindeler({ enrollments }: { enrollments: Enrollment[] }) {
                   </td>
                   <td>{e.preferred_lesday ? <Badge kind={e.preferred_lesday === "Geen voorkeur" ? "default" : "info"}>{e.preferred_lesday}</Badge> : <span className="text-subtle">—</span>}</td>
                   <td className="num">{ageLabel(e, { approx: true })}</td>
+                  <td onClick={(ev) => ev.stopPropagation()}>
+                    <div className="intake-enrollment-cell">
+                      {intakeByEnrollment[e.id]?.intake_slots ? (
+                        <div>
+                          <div className="font-semibold text-sm">{new Date(`${intakeByEnrollment[e.id].intake_slots!.date}T12:00:00`).toLocaleDateString("nl-NL", { day: "numeric", month: "short" })}</div>
+                          <div className="text-xs text-subtle">{intakeByEnrollment[e.id].intake_slots!.start_time.slice(0, 5)} – {intakeByEnrollment[e.id].intake_slots!.end_time.slice(0, 5)}</div>
+                        </div>
+                      ) : <span className="text-xs text-subtle">Nog niet gekozen</span>}
+                      <Btn size="sm" kind="ghost" icon="copy" disabled={!activeIntake || !e.intake_access_token}
+                        title={activeIntake ? `Persoonlijke intakelink voor ${e.child_name} kopiëren` : "Er is geen actief intakemoment"}
+                        aria-label={`Intakelink voor ${e.child_name} kopiëren`}
+                        onClick={() => void copyIntakeLink(e)} />
+                    </div>
+                  </td>
                   <td onClick={(ev) => ev.stopPropagation()}>
                     <Select value={p.class_id ?? ""} style={{ minWidth: 150 }} onChange={(ev) => patch(e, { class_id: ev.target.value || null })}>
                       <option value="">— kies klas —</option>
@@ -343,7 +385,7 @@ export function Klassenindeler({ enrollments }: { enrollments: Enrollment[] }) {
                 </tr>
               );
             })}
-            {indelen.length === 0 && <tr><td colSpan={8}><div className="empty">Geen inschrijvingen voor deze filter.</div></td></tr>}
+            {indelen.length === 0 && <tr><td colSpan={9}><div className="empty">Geen inschrijvingen voor deze filter.</div></td></tr>}
           </tbody>
         </table>
       </Card>

@@ -43,6 +43,7 @@ export function Sidebar({ collapsed, onToggle, mobile, onMouseEnter, onMouseLeav
         { to: "/tasks", label: "Taken", icon: "list", countKey: "tasks" },
         { group: "Administratie" },
         { to: "/enrollments", label: "Inschrijvingen", icon: "inbox", countKey: "enrollments" },
+        { to: "/intakes", label: "Intake", icon: "calendar" },
         { to: "/admin-toetsen", label: "Toetsen", icon: "edit" },
         { to: "/finance", label: "Financiën", icon: "coins" },
         { group: "Systeem" },

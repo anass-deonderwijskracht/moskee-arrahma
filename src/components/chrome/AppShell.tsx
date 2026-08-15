@@ -18,6 +18,7 @@ const TOPNAV = [
   { to: "/tasks", label: "Taken" },
   { to: "/planning", label: "Planning" },
   { to: "/enrollments", label: "Inschrijvingen" },
+  { to: "/intakes", label: "Intake" },
   { to: "/admin-toetsen", label: "Toetsen" },
   { to: "/finance", label: "Financiën" },
   { to: "/settings", label: "Instellingen" },
