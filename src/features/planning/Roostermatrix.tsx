@@ -6,6 +6,7 @@ import { useToast } from "@/components/chrome/Toast";
 import { usePlanningMatrix, useSaveLessons, useCreateLessons, useDuplicateLessons, useDeleteLessons, type LessonPatch } from "@/data/planning";
 import { useTeachers } from "@/data/people";
 import { useSchooljaren, useCurrentSchooljaar } from "@/data/schooljaren";
+import { useSchoolPeriods, periodFor } from "@/data/periods";
 
 type CellState = { teacher_id: string | null; quran_teacher_id: string | null; type: string; teacher_na: boolean; quran_na: boolean };
 const TYPE_LABEL: Record<string, string> = { les: "Les", vrij: "Vrij", toets: "Toets", activiteit: "Activiteit" };
@@ -47,6 +48,7 @@ export function Roostermatrix() {
   const createLessons = useCreateLessons(effectiveSj);
   const duplicate = useDuplicateLessons(effectiveSj);
   const removeLessons = useDeleteLessons(effectiveSj);
+  const { data: periods } = useSchoolPeriods(effectiveSj);
 
   const classes = data?.classes ?? [];
   const weeks = data?.weeks ?? [];
@@ -337,6 +339,17 @@ export function Roostermatrix() {
                         <span className="font-semibold">Week {w.week_nr}</span>
                       </label>
                       <div className="text-xs text-subtle font-mono" style={{ marginLeft: 22 }}>{ddmmyy(w.date)}</div>
+                      {(() => {
+                        // Vakantie of feestdag in deze week zichtbaar maken, ook
+                        // als de les nog gewoon op 'Les' staat.
+                        const p = periodFor(periods ?? [], w.date);
+                        if (!p) return null;
+                        return (
+                          <div style={{ marginLeft: 22, marginTop: 4 }}>
+                            <Badge kind={p.kind === "feestdag" ? "primary" : p.kind === "ramadan" ? "accent" : "info"}>{p.name}</Badge>
+                          </div>
+                        );
+                      })()}
                     </td>
                     {visibleClasses.map((c) => {
                       const st = cell(c.id, w.week_nr);

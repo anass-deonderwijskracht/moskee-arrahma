@@ -227,7 +227,7 @@ export interface Database {
       intake_moments: {
         Row: {
           id: string; description: string; duration_text: string;
-          status: string; created_at: string; updated_at: string;
+          status: string; allow_other: boolean; created_at: string; updated_at: string;
         };
         Insert: { description: string; duration_text: string } & Partial<Database["public"]["Tables"]["intake_moments"]["Row"]>;
         Update: Partial<Database["public"]["Tables"]["intake_moments"]["Row"]>;
@@ -244,8 +244,8 @@ export interface Database {
       };
       intake_choices: {
         Row: {
-          id: string; intake_moment_id: string; intake_slot_id: string; enrollment_id: string;
-          chosen_at: string; updated_at: string;
+          id: string; intake_moment_id: string; intake_slot_id: string | null; enrollment_id: string;
+          other_text: string | null; chosen_at: string; updated_at: string;
         };
         Insert: { intake_moment_id: string; intake_slot_id: string; enrollment_id: string } & Partial<Database["public"]["Tables"]["intake_choices"]["Row"]>;
         Update: Partial<Database["public"]["Tables"]["intake_choices"]["Row"]>;
@@ -292,6 +292,16 @@ export interface Database {
         } & Timestamps;
         Insert: { leerling_id: string } & Partial<Database["public"]["Tables"]["payments"]["Row"]>;
         Update: Partial<Database["public"]["Tables"]["payments"]["Row"]>;
+        Relationships: [];
+      };
+      school_periods: {
+        Row: {
+          id: string; schooljaar_id: string; name: string; kind: string;
+          start_date: string; end_date: string; blocks_lessons: boolean; note: string | null;
+        } & Timestamps;
+        Insert: { schooljaar_id: string; name: string; start_date: string; end_date: string }
+          & Partial<Database["public"]["Tables"]["school_periods"]["Row"]>;
+        Update: Partial<Database["public"]["Tables"]["school_periods"]["Row"]>;
         Relationships: [];
       };
       tasks: {
@@ -347,7 +357,7 @@ export interface Database {
       finalize_enrollment: { Args: { p_placement_id: string }; Returns: string };
       get_public_intake: { Args: { p_token: string }; Returns: Json };
       is_admin: { Args: Record<string, never>; Returns: boolean };
-      submit_public_intake: { Args: { p_token: string; p_slot_id: string }; Returns: Json };
+      submit_public_intake: { Args: { p_token: string; p_slot_id: string | null; p_other_text: string | null }; Returns: Json };
     };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;

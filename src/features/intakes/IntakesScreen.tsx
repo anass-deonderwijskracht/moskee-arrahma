@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Badge, Btn, Card, Icon, Section, Select } from "@/components/ui";
+import { Badge, Btn, Card, Icon, Section, Select, Toggle } from "@/components/ui";
 import { Field, Modal, ModalFooter } from "@/components/ui/Modal";
 import { useToast } from "@/components/chrome/Toast";
 import { ErrorState, Loading } from "@/features/_shared/states";
@@ -99,10 +99,12 @@ export function IntakesScreen() {
           {moments.map((moment) => {
             const choicesBySlot = new Map<string, typeof moment.intake_choices>();
             for (const choice of moment.intake_choices) {
+              if (!choice.intake_slot_id) continue;
               const current = choicesBySlot.get(choice.intake_slot_id) ?? [];
               current.push(choice);
               choicesBySlot.set(choice.intake_slot_id, current);
             }
+            const otherChoices = moment.intake_choices.filter((choice) => !choice.intake_slot_id && choice.other_text);
             const slotById = new Map(moment.intake_slots.map((slot) => [slot.id, slot]));
             return (
               <Card
@@ -115,7 +117,7 @@ export function IntakesScreen() {
                     {moment.status !== "actief" && <Btn size="sm" kind="primary" onClick={() => void changeStatus(moment, "actief")}>Activeren</Btn>}
                     {moment.status === "actief" && <Btn size="sm" onClick={() => void changeStatus(moment, "verlopen")}>Laten verlopen</Btn>}
                     <Btn size="sm" icon="edit" onClick={() => setEditing(moment)}>Bewerken</Btn>
-                    <Btn size="sm" kind="ghost" icon="trash" aria-label="Verwijderen" title="Verwijderen" onClick={() => void deleteMoment(moment)} />
+                    <Btn size="sm" kind="danger" icon="trash" onClick={() => void deleteMoment(moment)}>Verwijderen</Btn>
                   </div>
                 }
               >
@@ -123,6 +125,7 @@ export function IntakesScreen() {
                   <div>
                     <div className="text-xs text-subtle font-semibold intake-kicker">Beschrijving</div>
                     <div className="intake-description">{moment.description}</div>
+                    {moment.allow_other && <div className="mt-2"><Badge kind="info">Ander moment toegestaan</Badge></div>}
                   </div>
                   <div className="intake-meta-card">
                     <span className="text-xs text-subtle">Duur per intake</span>
@@ -150,6 +153,20 @@ export function IntakesScreen() {
                       </div>
                     );
                   })}
+                  {(moment.allow_other || otherChoices.length > 0) && (
+                    <div className="intake-slot-admin">
+                      <div className="intake-slot-date">
+                        <Icon name="edit" size={15} />
+                        <div><strong>Ander moment</strong><span>Vrij tekstveld</span></div>
+                      </div>
+                      <Badge kind={otherChoices.length ? "primary" : "default"}>{otherChoices.length} gekozen</Badge>
+                      <div className="intake-slot-names">
+                        {otherChoices.length
+                          ? otherChoices.map((choice) => `${choice.enrollments?.child_name ?? "Onbekend"}: ${choice.other_text}`).join(" · ")
+                          : "Nog niemand"}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div className="intake-responses-head">
@@ -163,11 +180,13 @@ export function IntakesScreen() {
                     <thead><tr><th>Inschrijving</th><th>Gekozen moment</th><th>Gekozen / gewijzigd op</th></tr></thead>
                     <tbody>
                       {moment.intake_choices.map((choice) => {
-                        const slot = slotById.get(choice.intake_slot_id);
+                        const slot = choice.intake_slot_id ? slotById.get(choice.intake_slot_id) : undefined;
                         return (
                           <tr key={choice.id}>
                             <td className="font-semibold">{choice.enrollments?.child_name ?? "Onbekende inschrijving"}</td>
-                            <td>{slot ? `${dateLabel(slot.date)} · ${timeLabel(slot.start_time)} – ${timeLabel(slot.end_time)}` : "—"}</td>
+                            <td>{slot
+                              ? `${dateLabel(slot.date)} · ${timeLabel(slot.start_time)} – ${timeLabel(slot.end_time)}`
+                              : choice.other_text ? `Anders: ${choice.other_text}` : "—"}</td>
                             <td className="text-subtle">{dateTimeLabel(choice.updated_at)}</td>
                           </tr>
                         );
@@ -193,6 +212,7 @@ function IntakeMomentModal({ initial, onClose }: { initial: Partial<IntakeMoment
   const [description, setDescription] = useState(initial.description ?? "");
   const [duration, setDuration] = useState(initial.duration_text ?? "");
   const [status, setStatus] = useState<IntakeStatus>((initial.status as IntakeStatus | undefined) ?? "concept");
+  const [allowOther, setAllowOther] = useState(initial.allow_other ?? false);
   const [slots, setSlots] = useState<IntakeSlotInput[]>(() =>
     initial.intake_slots?.length
       ? initial.intake_slots.map((slot, position) => ({
@@ -229,6 +249,7 @@ function IntakeMomentModal({ initial, onClose }: { initial: Partial<IntakeMoment
         description,
         duration_text: duration,
         status,
+        allow_other: allowOther,
         slots,
       });
       toast(initial.id ? "Intakemoment bijgewerkt" : "Intakemoment aangemaakt");
@@ -260,6 +281,10 @@ function IntakeMomentModal({ initial, onClose }: { initial: Partial<IntakeMoment
             <option value="verlopen">Verlopen</option>
           </Select>
         </Field>
+      </div>
+      <div className="intake-other-setting">
+        <Toggle checked={allowOther} onChange={setAllowOther} label="Een ander moment toestaan" />
+        <div className="text-xs text-subtle">De inschrijving krijgt dan naast de vaste data een optie “Anders” met een vrij tekstveld.</div>
       </div>
 
       <div className="flex items-center justify-between mt-2">

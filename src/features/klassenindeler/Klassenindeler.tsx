@@ -333,6 +333,11 @@ export function Klassenindeler({ enrollments }: { enrollments: Enrollment[] }) {
                           <div className="font-semibold text-sm">{new Date(`${intakeByEnrollment[e.id].intake_slots!.date}T12:00:00`).toLocaleDateString("nl-NL", { day: "numeric", month: "short" })}</div>
                           <div className="text-xs text-subtle">{intakeByEnrollment[e.id].intake_slots!.start_time.slice(0, 5)} – {intakeByEnrollment[e.id].intake_slots!.end_time.slice(0, 5)}</div>
                         </div>
+                      ) : intakeByEnrollment[e.id]?.other_text ? (
+                        <div title={intakeByEnrollment[e.id].other_text ?? undefined} style={{ maxWidth: 125 }}>
+                          <div className="font-semibold text-sm">Anders</div>
+                          <div className="text-xs text-subtle truncate">{intakeByEnrollment[e.id].other_text}</div>
+                        </div>
                       ) : <span className="text-xs text-subtle">Nog niet gekozen</span>}
                       <Btn size="sm" kind="ghost" icon="copy" disabled={!activeIntake || !e.intake_access_token}
                         title={activeIntake ? `Persoonlijke intakelink voor ${e.child_name} kopiëren` : "Er is geen actief intakemoment"}

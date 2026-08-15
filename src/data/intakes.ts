@@ -28,19 +28,21 @@ export type SaveIntakeMomentInput = {
   description: string;
   duration_text: string;
   status: IntakeStatus;
+  allow_other: boolean;
   slots: IntakeSlotInput[];
 };
 
 export type PublicIntake = {
-  moment: { id: string; description: string; duration_text: string };
+  moment: { id: string; description: string; duration_text: string; allow_other: boolean };
   enrollment: { child_name: string };
   slots: Pick<IntakeSlot, "id" | "date" | "start_time" | "end_time">[];
-  selection: { slot_id: string; chosen_at: string; updated_at: string } | null;
+  selection: { slot_id: string | null; other_text: string | null; chosen_at: string; updated_at: string } | null;
 };
 
 export type ActiveIntakeSelection = {
   enrollment_id: string;
   updated_at: string;
+  other_text: string | null;
   intake_slots: Pick<IntakeSlot, "date" | "start_time" | "end_time"> | null;
 };
 
@@ -84,6 +86,7 @@ export function useSaveIntakeMoment() {
         description: input.description.trim(),
         duration_text: input.duration_text.trim(),
         status: input.status,
+        allow_other: input.allow_other,
       };
 
       if (momentId) {
@@ -171,7 +174,7 @@ export function useActiveIntakeOverview() {
     queryFn: async (): Promise<ActiveIntakeOverview | null> => {
       const { data, error } = await supabase
         .from("intake_moments")
-        .select("id, intake_choices(enrollment_id, updated_at, intake_slots(date, start_time, end_time))")
+        .select("id, intake_choices(enrollment_id, updated_at, other_text, intake_slots(date, start_time, end_time))")
         .eq("status", "actief")
         .maybeSingle();
       if (error) throw error;
@@ -196,10 +199,11 @@ export function usePublicIntake(token: string | undefined) {
 export function useSubmitPublicIntake(token: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (slotId: string): Promise<PublicIntake> => {
+    mutationFn: async ({ slotId, otherText }: { slotId: string | null; otherText: string | null }): Promise<PublicIntake> => {
       const { data, error } = await supabase.rpc("submit_public_intake", {
         p_token: token,
         p_slot_id: slotId,
+        p_other_text: otherText,
       });
       if (error) throw error;
       return data as unknown as PublicIntake;

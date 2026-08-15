@@ -12,6 +12,10 @@ import { useClasses } from "@/data/classes";
 import { useUsers, useCreateUser, useUpdateUser, useDeleteUser, type AppUser } from "@/data/users";
 import { useAuditLog, useSaveSettings, useSchooljaarCounts, useSchooljaarMutations } from "@/data/settings";
 import { useGenerateLesweken, type GenerateWeeksResult } from "@/data/planning";
+import {
+  useSchoolPeriods, usePeriodMutations, useApplyPeriodsToLessons,
+  PERIOD_KINDS, PERIOD_KIND_LABEL, type SchoolPeriod, type ApplyPeriodsResult,
+} from "@/data/periods";
 import { useTableTools, SortTh, SelectTh, BulkBar } from "@/features/_shared/tableTools";
 import { GoogleContactsSettings } from "./GoogleContactsSettings";
 
@@ -191,7 +195,149 @@ function PlanningSettings() {
           alleen de ontbrekende weken aan; bestaande lessen en hun docenten blijven staan.
         </div>
       </Card>
+
+      <VakantiesEnFeestdagen schooljaarId={effectiveSj} jaarNaam={jaar?.name ?? ""} />
     </div>
+  );
+}
+
+const EMPTY_PERIOD = { name: "", kind: "vakantie", start_date: "", end_date: "", blocks_lessons: true, note: "" };
+
+function VakantiesEnFeestdagen({ schooljaarId, jaarNaam }: { schooljaarId: string | null; jaarNaam: string }) {
+  const toast = useToast();
+  const { data: periods, isLoading } = useSchoolPeriods(schooljaarId);
+  const { addPeriod, updatePeriod, removePeriod } = usePeriodMutations(schooljaarId);
+  const apply = useApplyPeriodsToLessons(schooljaarId);
+  const [adding, setAdding] = useState(false);
+  const [form, setForm] = useState(EMPTY_PERIOD);
+  const [result, setResult] = useState<ApplyPeriodsResult | null>(null);
+
+  const rows = periods ?? [];
+  const blocking = rows.filter((p) => p.blocks_lessons);
+
+  const dNL = (iso: string) => new Date(iso + "T00:00:00").toLocaleDateString("nl-NL", { day: "numeric", month: "short", year: "numeric" });
+
+  const save = async () => {
+    if (!form.name.trim() || !form.start_date || !form.end_date) return;
+    if (form.start_date > form.end_date) { toast("De einddatum ligt vóór de begindatum"); return; }
+    try {
+      await addPeriod.mutateAsync({
+        name: form.name.trim(), kind: form.kind,
+        start_date: form.start_date, end_date: form.end_date,
+        blocks_lessons: form.blocks_lessons, note: form.note.trim() || null,
+      });
+      toast("Periode toegevoegd"); setAdding(false); setForm(EMPTY_PERIOD);
+    } catch (e) { toast("Toevoegen mislukt: " + (e instanceof Error ? e.message : "")); }
+  };
+
+  const onDelete = (p: SchoolPeriod) => {
+    if (!confirm(`"${p.name}" verwijderen? Dit zet lessen niet terug op 'Les'.`)) return;
+    removePeriod.mutate(p.id, { onError: () => toast("Verwijderen mislukt") });
+  };
+
+  const run = async () => {
+    if (!blocking.length) { toast("Vink eerst minstens één periode aan"); return; }
+    if (!confirm(
+      `Lessen in ${blocking.length} periode(s) op vrij zetten?\n\n`
+      + blocking.map((p) => `· ${p.name} (${dNL(p.start_date)} – ${dNL(p.end_date)})`).join("\n")
+      + "\n\nDe reden komt als onderwerp bij de les te staan en de docenttoewijzing wordt gewist. "
+      + "Lessen buiten deze periodes blijven ongemoeid.",
+    )) return;
+    try {
+      const r = await apply.mutateAsync(rows);
+      setResult(r);
+      toast(r.updated ? `${r.updated} les(sen) op vrij gezet` : "Alles stond al goed");
+    } catch (e) { toast("Mislukt: " + (e instanceof Error ? e.message : "")); }
+  };
+
+  return (
+    <Card
+      title="Vakanties & feestdagen"
+      sub={`Schoolvakanties en islamitische feestdagen van ${jaarNaam || "dit schooljaar"} — de basis voor het vrij zetten van lessen.`}
+      action={<Btn size="sm" icon="plus" onClick={() => setAdding(true)}>Periode toevoegen</Btn>}
+    >
+      {isLoading ? <Loading /> : rows.length === 0 ? (
+        <div className="empty">Nog geen periodes voor dit schooljaar. Voeg ze hier toe.</div>
+      ) : (
+        <div className="scroll-x">
+          <table className="table">
+            <thead><tr>
+              <th style={{ width: 1 }} title="Meenemen bij 'lessen op vrij zetten'">Vrij</th>
+              <th>Periode</th><th>Soort</th><th>Van</th><th>Tot en met</th><th>Toelichting</th><th style={{ width: 1 }}></th>
+            </tr></thead>
+            <tbody>
+              {rows.map((p) => (
+                <tr key={p.id}>
+                  <td onClick={(e) => e.stopPropagation()}>
+                    <input type="checkbox" checked={p.blocks_lessons} aria-label={`${p.name} meenemen`}
+                      onChange={(e) => updatePeriod.mutate({ id: p.id, patch: { blocks_lessons: e.target.checked } }, { onError: () => toast("Opslaan mislukt") })} />
+                  </td>
+                  <td className="font-semibold">{p.name}</td>
+                  <td><Badge kind={p.kind === "feestdag" ? "primary" : p.kind === "ramadan" ? "accent" : "info"}>{PERIOD_KIND_LABEL[p.kind] ?? p.kind}</Badge></td>
+                  <td className="text-sm">
+                    <input className="input" type="date" defaultValue={p.start_date} style={{ width: 150 }}
+                      onBlur={(e) => { if (e.target.value && e.target.value !== p.start_date) updatePeriod.mutate({ id: p.id, patch: { start_date: e.target.value } }, { onError: () => toast("Opslaan mislukt") }); }} />
+                  </td>
+                  <td className="text-sm">
+                    <input className="input" type="date" defaultValue={p.end_date} style={{ width: 150 }}
+                      onBlur={(e) => { if (e.target.value && e.target.value !== p.end_date) updatePeriod.mutate({ id: p.id, patch: { end_date: e.target.value } }, { onError: () => toast("Opslaan mislukt") }); }} />
+                  </td>
+                  <td className="text-xs text-subtle" style={{ maxWidth: 280, whiteSpace: "normal" }}>{p.note}</td>
+                  <td><button className="btn ghost sm" aria-label={`${p.name} verwijderen`} onClick={() => onDelete(p)}><Icon name="trash" size={12} /></button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <div className="text-xs text-subtle mt-3">
+        Islamitische data volgen de Umm al-Qura-berekening en kunnen een dag verschuiven met de
+        maanwaarneming — controleer ze kort van tevoren en pas de datum hier aan.
+        Ramadan staat standaard uit: die maand wordt meestal gewoon lesgegeven.
+      </div>
+
+      <div className="flex items-center justify-between mt-3" style={{ gap: 12, flexWrap: "wrap" }}>
+        <span className="text-sm text-muted">
+          {blocking.length === 0 ? "Geen periodes aangevinkt." : <><b>{blocking.length}</b> periode(s) aangevinkt om vrij te zetten.</>}
+        </span>
+        <Btn kind="primary" icon="check" disabled={!schooljaarId || !blocking.length || apply.isPending} onClick={run}>
+          {apply.isPending ? "Bezig…" : "Lessen in deze periodes op vrij zetten"}
+        </Btn>
+      </div>
+
+      {result && (
+        <div className="text-sm mt-3" style={{ padding: "10px 12px", background: "var(--success-soft)", color: "var(--success)", borderRadius: 8 }}>
+          {result.updated} les(sen) op vrij gezet{result.unchanged > 0 && <> · {result.unchanged} stond al goed</>}.
+          {result.perPeriod.length > 0 && (
+            <div className="text-xs mt-1">{result.perPeriod.map((p) => `${p.name}: ${p.lessons}`).join(" · ")}</div>
+          )}
+        </div>
+      )}
+
+      {adding && (
+        <Modal title="Periode toevoegen" sub="Een vakantie, feestdag of andere periode" onClose={() => setAdding(false)}
+          footer={<ModalFooter onCancel={() => setAdding(false)} onSave={save} saving={addPeriod.isPending} disabled={!form.name.trim() || !form.start_date || !form.end_date} />}>
+          <div className="grid-3" style={{ gridTemplateColumns: "2fr 1fr" }}>
+            <Field label="Naam"><input className="input" autoFocus value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="bv. Herfstvakantie" /></Field>
+            <Field label="Soort">
+              <Select value={form.kind} onChange={(e) => setForm((f) => ({ ...f, kind: e.target.value }))}>
+                {PERIOD_KINDS.map((k) => <option key={k} value={k}>{PERIOD_KIND_LABEL[k]}</option>)}
+              </Select>
+            </Field>
+          </div>
+          <div className="grid-3" style={{ gridTemplateColumns: "1fr 1fr" }}>
+            <Field label="Van"><input className="input" type="date" value={form.start_date} onChange={(e) => setForm((f) => ({ ...f, start_date: e.target.value }))} /></Field>
+            <Field label="Tot en met"><input className="input" type="date" value={form.end_date} onChange={(e) => setForm((f) => ({ ...f, end_date: e.target.value }))} /></Field>
+          </div>
+          <Field label="Toelichting"><input className="input" value={form.note} onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))} placeholder="bv. Regio Noord" /></Field>
+          <label className="flex items-center gap-2 text-sm" style={{ cursor: "pointer" }}>
+            <input type="checkbox" checked={form.blocks_lessons} onChange={(e) => setForm((f) => ({ ...f, blocks_lessons: e.target.checked }))} />
+            Lessen in deze periode op vrij zetten
+          </label>
+        </Modal>
+      )}
+    </Card>
   );
 }
 

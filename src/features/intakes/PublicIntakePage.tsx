@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useParams } from "react-router-dom";
 import { Icon } from "@/components/ui";
 import { usePublicIntake, useSubmitPublicIntake, type PublicIntake } from "@/data/intakes";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const OTHER_VALUE = "__other__";
 
 function dateLabel(date: string) {
   return new Date(`${date}T12:00:00`).toLocaleDateString("nl-NL", {
@@ -16,7 +17,7 @@ function timeLabel(value: string) {
 }
 
 function slotLabel(slot: PublicIntake["slots"][number]) {
-  return `${dateLabel(slot.date)} van ${timeLabel(slot.start_time)} tot ${timeLabel(slot.end_time)}`;
+  return `${dateLabel(slot.date)}, ${timeLabel(slot.start_time)}–${timeLabel(slot.end_time)}`;
 }
 
 export function PublicIntakePage() {
@@ -25,20 +26,33 @@ export function PublicIntakePage() {
   const { data, isLoading, isError } = usePublicIntake(safeToken);
   const submit = useSubmitPublicIntake(safeToken ?? "");
   const [selected, setSelected] = useState("");
+  const [otherText, setOtherText] = useState("");
   const [editing, setEditing] = useState(false);
 
   useEffect(() => {
-    if (data?.selection?.slot_id) setSelected(data.selection.slot_id);
-  }, [data?.selection?.slot_id]);
+    if (data?.selection?.other_text) {
+      setSelected(OTHER_VALUE);
+      setOtherText(data.selection.other_text);
+    } else if (data?.selection?.slot_id) {
+      setSelected(data.selection.slot_id);
+      setOtherText("");
+    }
+  }, [data?.selection?.other_text, data?.selection?.slot_id]);
+
+  const choosingOther = selected === OTHER_VALUE;
+  const canSubmit = !!selected && (!choosingOther || !!otherText.trim());
 
   const save = async () => {
-    if (!selected || !safeToken) return;
+    if (!canSubmit || !safeToken) return;
     try {
-      await submit.mutateAsync(selected);
+      await submit.mutateAsync({
+        slotId: choosingOther ? null : selected,
+        otherText: choosingOther ? otherText.trim() : null,
+      });
       setEditing(false);
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch {
-      // De foutmelding wordt onder de knop getoond; de gemaakte keuze blijft staan.
+      // De foutmelding wordt onder het formulier getoond; de invoer blijft staan.
     }
   };
 
@@ -46,9 +60,8 @@ export function PublicIntakePage() {
     return (
       <PublicLayout>
         <div className="public-intake-state">
-          <div className="public-intake-state-icon"><Icon name="calendar" size={28} /></div>
           <h1>Formulier niet beschikbaar</h1>
-          <p>Deze persoonlijke link is ongeldig of er is op dit moment geen actief intakemoment. Neem contact op met Moskee Arrahma.</p>
+          <p>Deze persoonlijke link is ongeldig of er is nu geen actief intakemoment. Neem contact op met Moskee Arrahma.</p>
         </div>
       </PublicLayout>
     );
@@ -66,20 +79,23 @@ export function PublicIntakePage() {
   }
 
   const selectedSlot = data.slots.find((slot) => slot.id === data.selection?.slot_id);
-  if (data.selection && selectedSlot && !editing) {
+  const savedOtherText = data.selection?.other_text?.trim() ?? "";
+  if (data.selection && (selectedSlot || savedOtherText) && !editing) {
     return (
       <PublicLayout>
         <div className="public-intake-confirm">
-          <div className="public-intake-check"><Icon name="check" size={30} /></div>
-          <div className="public-intake-eyebrow">Voorkeur ontvangen</div>
+          <div className="public-intake-saved"><Icon name="check" size={15} /> Voorkeur opgeslagen</div>
           <h1>Bedankt, {data.enrollment.child_name}</h1>
-          <p>Je intakevoorkeur is opgeslagen. We zien je graag op het onderstaande moment.</p>
+          <p>Je intakevoorkeur is ontvangen.</p>
           <div className="public-intake-confirm-slot">
-            <Icon name="calendar" size={20} />
-            <div><span>Gekozen intakemoment</span><strong>{slotLabel(selectedSlot)}</strong></div>
+            <Icon name={selectedSlot ? "calendar" : "edit"} size={18} />
+            <div>
+              <span>Gekozen moment</span>
+              <strong>{selectedSlot ? slotLabel(selectedSlot) : `Anders: ${savedOtherText}`}</strong>
+            </div>
           </div>
-          <div className="public-intake-duration"><Icon name="clock" size={16} /> Duur: {data.moment.duration_text}</div>
-          <button className="public-intake-secondary" type="button" onClick={() => setEditing(true)}><Icon name="edit" size={16} /> Voorkeur wijzigen</button>
+          <p className="public-intake-duration"><Icon name="clock" size={15} /> Duur per intake: {data.moment.duration_text}</p>
+          <button className="public-intake-secondary" type="button" onClick={() => setEditing(true)}>Voorkeur wijzigen</button>
         </div>
       </PublicLayout>
     );
@@ -88,19 +104,15 @@ export function PublicIntakePage() {
   return (
     <PublicLayout>
       <div className="public-intake-head">
-        <div className="public-intake-eyebrow">Persoonlijke intake-uitnodiging</div>
-        <h1>Welkom, {data.enrollment.child_name}</h1>
+        <h1>Intake voor {data.enrollment.child_name}</h1>
         <p className="public-intake-description">{data.moment.description}</p>
-        <div className="public-intake-duration"><Icon name="clock" size={16} /> Duur per intake: {data.moment.duration_text}</div>
+        <p className="public-intake-duration"><Icon name="clock" size={15} /> Duur per intake: {data.moment.duration_text}</p>
       </div>
 
       <div className="public-intake-form">
         <div className="public-intake-form-head">
-          <div>
-            <h2>Kies je voorkeursmoment</h2>
-            <p>Selecteer één datum en tijd. Je kunt deze keuze later via dezelfde link wijzigen.</p>
-          </div>
-          <span>1 keuze</span>
+          <h2>Kies een moment</h2>
+          <p>Kies één optie. Via dezelfde link kun je je keuze later wijzigen.</p>
         </div>
 
         <fieldset className="public-intake-options">
@@ -110,22 +122,40 @@ export function PublicIntakePage() {
             return (
               <label className={`public-intake-option${checked ? " selected" : ""}`} key={slot.id}>
                 <input type="radio" name="intake-slot" value={slot.id} checked={checked} onChange={() => setSelected(slot.id)} />
-                <span className="public-intake-radio"><Icon name="check" size={13} /></span>
-                <span className="public-intake-option-date"><strong>{dateLabel(slot.date)}</strong><span>{timeLabel(slot.start_time)} – {timeLabel(slot.end_time)} uur</span></span>
-                <Icon name="chevronRight" size={18} className="public-intake-chevron" />
+                <span className="public-intake-radio" aria-hidden="true" />
+                <span className="public-intake-option-date">
+                  <strong>{dateLabel(slot.date)}</strong>
+                  <span>{timeLabel(slot.start_time)}–{timeLabel(slot.end_time)}</span>
+                </span>
               </label>
             );
           })}
+
+          {data.moment.allow_other && (
+            <div className={`public-intake-other${choosingOther ? " selected" : ""}`}>
+              <label className={`public-intake-option${choosingOther ? " selected" : ""}`}>
+                <input type="radio" name="intake-slot" value={OTHER_VALUE} checked={choosingOther} onChange={() => setSelected(OTHER_VALUE)} />
+                <span className="public-intake-radio" aria-hidden="true" />
+                <span className="public-intake-option-date"><strong>Anders</strong><span>Geef zelf aan wat mogelijk is</span></span>
+              </label>
+              {choosingOther && (
+                <div className="public-intake-other-field">
+                  <label htmlFor="other-moment">Welke dag of welk tijdstip komt beter uit?</label>
+                  <textarea id="other-moment" rows={3} maxLength={500} value={otherText} onChange={(event) => setOtherText(event.target.value)} placeholder="Bijvoorbeeld: woensdagmiddag na 15:00" />
+                  <span>{otherText.length}/500</span>
+                </div>
+              )}
+            </div>
+          )}
         </fieldset>
 
-        {data.slots.length === 0 && <div className="public-intake-error">Er zijn nog geen beschikbare momenten. Neem contact op met Moskee Arrahma.</div>}
+        {data.slots.length === 0 && !data.moment.allow_other && <div className="public-intake-error">Er zijn nog geen beschikbare momenten. Neem contact op met Moskee Arrahma.</div>}
         {submit.isError && <div className="public-intake-error" role="alert">Opslaan is niet gelukt. Controleer je verbinding en probeer het opnieuw.</div>}
 
         <div className="public-intake-actions">
           {data.selection && <button className="public-intake-secondary" type="button" onClick={() => setEditing(false)}>Annuleren</button>}
-          <button className="public-intake-submit" type="button" disabled={!selected || submit.isPending} onClick={() => void save()}>
-            {submit.isPending ? "Bezig met opslaan…" : data.selection ? "Wijziging opslaan" : "Voorkeur verzenden"}
-            {!submit.isPending && <Icon name="chevronRight" size={18} />}
+          <button className="public-intake-submit" type="button" disabled={!canSubmit || submit.isPending} onClick={() => void save()}>
+            {submit.isPending ? "Opslaan…" : data.selection ? "Wijziging opslaan" : "Voorkeur opslaan"}
           </button>
         </div>
       </div>
@@ -133,18 +163,13 @@ export function PublicIntakePage() {
   );
 }
 
-function PublicLayout({ children }: { children: React.ReactNode }) {
+function PublicLayout({ children }: { children: ReactNode }) {
   return (
     <main className="public-intake-page">
-      <div className="public-intake-glow public-intake-glow-one" />
-      <div className="public-intake-glow public-intake-glow-two" />
       <div className="public-intake-shell">
-        <header className="public-intake-brand">
-          <img src="/branding/moskee-arrahma-logo.png" alt="Moskee Arrahma" />
-          <div><strong>Moskee Arrahma</strong><span>Weekendonderwijs</span></div>
-        </header>
+        <header className="public-intake-brand">Moskee Arrahma <span>Weekendonderwijs</span></header>
         <section className="public-intake-card">{children}</section>
-        <footer>Je persoonlijke link · Deel deze link niet met anderen</footer>
+        <footer>Deze link is persoonlijk. Deel hem niet met anderen.</footer>
       </div>
     </main>
   );
