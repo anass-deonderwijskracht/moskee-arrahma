@@ -3,6 +3,7 @@ import { Badge, Btn, Card, Icon, Section, Select, Toggle } from "@/components/ui
 import { Field, Modal, ModalFooter } from "@/components/ui/Modal";
 import { useToast } from "@/components/chrome/Toast";
 import { ErrorState, Loading } from "@/features/_shared/states";
+import { SearchBox, SortTh, useTableTools } from "@/features/_shared/tableTools";
 import {
   useDeleteIntakeMoment,
   useDeleteIntakeChoices,
@@ -36,6 +37,8 @@ type IntakeResponse = {
   note: string | null;
   updatedAt: string;
 };
+
+type IntakeSortKey = "description" | "status" | "dates" | "responses" | "children" | "attendance" | "created";
 
 function groupResponses(choices: IntakeMoment["intake_choices"], attendedIds: Set<string>): IntakeResponse[] {
   const grouped = new Map<string, IntakeMoment["intake_choices"]>();
@@ -86,6 +89,21 @@ function emptySlot(position: number, date?: string): IntakeSlotInput {
   return { date: date ?? tomorrow, start_time: FIXED_INTAKE_START, end_time: FIXED_INTAKE_END, position };
 }
 
+function momentCounts(moment: IntakeMoment) {
+  const attended = moment.intake_attendance.filter((attendance) => attendance.attended).length;
+  return {
+    responses: new Set(moment.intake_choices.map((choice) => choice.response_group_id)).size,
+    children: moment.intake_choices.length,
+    attended,
+  };
+}
+
+function momentDateSummary(moment: IntakeMoment) {
+  const [first, ...rest] = moment.intake_slots;
+  if (!first) return "Geen data";
+  return `${dateLabel(first.date)}${rest.length ? ` +${rest.length}` : ""}`;
+}
+
 export function IntakesScreen() {
   const toast = useToast();
   const { data, isLoading, isError, error } = useIntakeMoments();
@@ -93,11 +111,33 @@ export function IntakesScreen() {
   const remove = useDeleteIntakeMoment();
   const removeChoice = useDeleteIntakeChoices();
   const [editing, setEditing] = useState<Partial<IntakeMoment> | null>(null);
-
-  if (isError) return <ErrorState error={error} />;
+  const [selectedMomentId, setSelectedMomentId] = useState<string | null>(null);
 
   const moments = data ?? [];
   const active = moments.find((moment) => moment.status === "actief");
+  const table = useTableTools<IntakeMoment, IntakeSortKey>({
+    rows: moments,
+    getId: (moment) => moment.id,
+    search: (moment, query) => [
+      moment.description,
+      moment.duration_text,
+      STATUS_LABEL[moment.status as IntakeStatus] ?? moment.status,
+      ...moment.intake_slots.map((slot) => slot.date),
+    ].some((value) => value.toLowerCase().includes(query)),
+    sorters: {
+      description: (moment) => moment.description,
+      status: (moment) => moment.status,
+      dates: (moment) => moment.intake_slots[0]?.date,
+      responses: (moment) => momentCounts(moment).responses,
+      children: (moment) => momentCounts(moment).children,
+      attendance: (moment) => momentCounts(moment).attended,
+      created: (moment) => moment.created_at,
+    },
+    initialSort: { key: "created", dir: "desc" },
+  });
+  const selectedMoment = moments.find((moment) => moment.id === selectedMomentId) ?? null;
+
+  if (isError) return <ErrorState error={error} />;
 
   const changeStatus = async (moment: IntakeMoment, status: IntakeStatus) => {
     if (status === "actief" && active && active.id !== moment.id
@@ -115,6 +155,7 @@ export function IntakesScreen() {
     if (!confirm(`Intakemoment definitief verwijderen?${extra}`)) return;
     try {
       await remove.mutateAsync(moment.id);
+      if (selectedMomentId === moment.id) setSelectedMomentId(null);
       toast("Intakemoment verwijderd");
     } catch (err) {
       toast("Verwijderen mislukt: " + (err instanceof Error ? err.message : "onbekend"));
@@ -137,8 +178,13 @@ export function IntakesScreen() {
       <Section
         title="Intake"
         sub={`${moments.length} intakemoment${moments.length === 1 ? "" : "en"} · ${active ? "één actief formulier" : "geen actief formulier"}`}
-        actions={<Btn kind="primary" icon="plus" onClick={() => setEditing({})}>Nieuw intakemoment</Btn>}
-      />
+        actions={
+          <>
+            <SearchBox value={table.q} onChange={table.setQ} placeholder="Zoek intakemoment…" width={230} />
+            <Btn kind="primary" icon="plus" onClick={() => setEditing({})}>Nieuw intakemoment</Btn>
+          </>
+        }
+      >
 
       {isLoading ? <Loading /> : moments.length === 0 ? (
         <Card>
@@ -149,8 +195,54 @@ export function IntakesScreen() {
           </div>
         </Card>
       ) : (
-        <div className="flex-col gap-4">
-          {moments.map((moment) => {
+        <>
+          <Card>
+            <div className="scroll-x">
+              <table className="table" style={{ minWidth: 860 }}>
+                <thead>
+                  <tr>
+                    <SortTh label="Intakemoment" k="description" sort={table.sort} onSort={table.toggleSort} />
+                    <SortTh label="Status" k="status" sort={table.sort} onSort={table.toggleSort} />
+                    <SortTh label="Data" k="dates" sort={table.sort} onSort={table.toggleSort} />
+                    <SortTh label="Reacties" k="responses" sort={table.sort} onSort={table.toggleSort} />
+                    <SortTh label="Kinderen" k="children" sort={table.sort} onSort={table.toggleSort} />
+                    <SortTh label="Aanwezig" k="attendance" sort={table.sort} onSort={table.toggleSort} />
+                    <SortTh label="Aangemaakt" k="created" sort={table.sort} onSort={table.toggleSort} />
+                    <th style={{ width: 1 }}></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {table.view.map((moment) => {
+                    const counts = momentCounts(moment);
+                    return (
+                      <tr key={moment.id} className={selectedMomentId === moment.id ? "selected" : ""} onClick={() => setSelectedMomentId(moment.id)}>
+                        <td>
+                          <div className="font-semibold intake-overview-description">{moment.description}</div>
+                          <div className="text-xs text-subtle">{moment.duration_text}</div>
+                        </td>
+                        <td><Badge kind={STATUS_KIND[moment.status as IntakeStatus]} dot>{STATUS_LABEL[moment.status as IntakeStatus]}</Badge></td>
+                        <td className="text-sm" style={{ textTransform: "capitalize" }}>{momentDateSummary(moment)}</td>
+                        <td className="num">{counts.responses}</td>
+                        <td className="num">{counts.children}</td>
+                        <td className="num">{counts.attended}</td>
+                        <td className="text-sm text-subtle">{dateTimeLabel(moment.created_at)}</td>
+                        <td onClick={(event) => event.stopPropagation()}>
+                          <div className="flex items-center gap-1">
+                            <Btn size="sm" kind="ghost" icon="edit" aria-label="Intakemoment bewerken" title="Bewerken" onClick={() => setEditing(moment)} />
+                            <Btn size="sm" kind="ghost" icon="trash" aria-label="Intakemoment verwijderen" title="Verwijderen" disabled={remove.isPending} onClick={() => void deleteMoment(moment)} />
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {table.view.length === 0 && <tr><td colSpan={8}><div className="empty">Geen intakemomenten gevonden.</div></td></tr>}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+
+          {selectedMoment && <div className="flex-col gap-4 mt-4">
+          {[selectedMoment].map((moment) => {
             const attendedIds = new Set(moment.intake_attendance.filter((attendance) => attendance.attended).map((attendance) => attendance.enrollment_id));
             const responses = groupResponses(moment.intake_choices, attendedIds);
             const responsesBySlot = new Map<string, IntakeResponse[]>();
@@ -178,6 +270,7 @@ export function IntakesScreen() {
                     {moment.status === "actief" && <Btn size="sm" onClick={() => void changeStatus(moment, "verlopen")}>Laten verlopen</Btn>}
                     <Btn size="sm" icon="edit" onClick={() => setEditing(moment)}>Bewerken</Btn>
                     <Btn size="sm" kind="danger" icon="trash" onClick={() => void deleteMoment(moment)}>Verwijderen</Btn>
+                    <Btn size="sm" kind="ghost" icon="x" aria-label="Details sluiten" title="Details sluiten" onClick={() => setSelectedMomentId(null)} />
                   </div>
                 }
               >
@@ -286,8 +379,10 @@ export function IntakesScreen() {
               </Card>
             );
           })}
-        </div>
+          </div>}
+        </>
       )}
+      </Section>
 
       {editing && <IntakeMomentModal initial={editing} onClose={() => setEditing(null)} />}
     </>

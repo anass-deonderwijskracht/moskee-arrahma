@@ -151,6 +151,28 @@ export function useCreateEnrollment() {
   });
 }
 
+export function useDuplicateEnrollment() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (enrollmentId: string): Promise<Enrollment> => {
+      const { data, error } = await supabase.rpc("duplicate_enrollment", { p_enrollment_id: enrollmentId });
+      if (error) throw error;
+      return data as unknown as Enrollment;
+    },
+    onSuccess: (duplicated) => {
+      qc.setQueryData<Enrollment[]>(["enrollments-full"], (current) => {
+        if (!current) return [duplicated];
+        return current.some((enrollment) => enrollment.id === duplicated.id)
+          ? current
+          : [...current, duplicated];
+      });
+      qc.invalidateQueries({ queryKey: ["enrollments-full"] });
+      qc.invalidateQueries({ queryKey: ["enrollment-counts"] });
+      qc.invalidateQueries({ queryKey: ["nav-counts"] });
+    },
+  });
+}
+
 export function usePlacements(schooljaarId: string | null) {
   return useQuery({
     queryKey: ["placements", schooljaarId],

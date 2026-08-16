@@ -366,6 +366,7 @@ export interface Database {
       };
     };
     Functions: {
+      duplicate_enrollment: { Args: { p_enrollment_id: string }; Returns: Json };
       finalize_enrollment: { Args: { p_placement_id: string }; Returns: string };
       get_public_intake: { Args: { p_token: string }; Returns: Json };
       get_public_intake_with_preferences: { Args: { p_token: string }; Returns: Json };

@@ -4,7 +4,7 @@ import { useToast } from "@/components/chrome/Toast";
 import {
   useUpdateEnrollmentStatus, useUpdateEnrollment, useUpdateEnrollmentParent,
   useDeleteEnrollments, useUpsertPlacement, usePlacementPayment, useSetPlacementPayment,
-  useFinalizeEnrollment, finalizeBlockers, ENROLL_STATUSES, type Enrollment, type Placement,
+  useDuplicateEnrollment, useFinalizeEnrollment, finalizeBlockers, ENROLL_STATUSES, type Enrollment, type Placement,
 } from "@/data/enrollments";
 import type { Tables } from "@/types/database";
 import { useTuitionTiers, useResolvedTuition, useSetLesgeldOverride } from "@/data/tuition";
@@ -17,14 +17,19 @@ const lbl = { fontSize: 11, color: "var(--fg-subtle)", display: "block", marginB
 /** Self-contained enrollment detail side-sheet — reused by the pipeline, table and klassenindeler.
  *  All fields edit inline and auto-save on blur/change. When `schooljaarId` is given a
  *  Financiën-sectie verschijnt (te betalen / betaald / verschuldigd). */
-export function EnrollmentSheet({ item, onClose, schooljaarId, placement }: {
-  item: Enrollment; onClose: () => void; schooljaarId?: string | null; placement?: Placement | null;
+export function EnrollmentSheet({ item, onClose, onDuplicated, schooljaarId, placement }: {
+  item: Enrollment;
+  onClose: () => void;
+  onDuplicated?: (enrollment: Enrollment) => void;
+  schooljaarId?: string | null;
+  placement?: Placement | null;
 }) {
   const toast = useToast();
   const updateStatus = useUpdateEnrollmentStatus();
   const updateEnrollment = useUpdateEnrollment();
   const updateParent = useUpdateEnrollmentParent();
   const del = useDeleteEnrollments();
+  const duplicate = useDuplicateEnrollment();
   const upsert = useUpsertPlacement();
   const finalize = useFinalizeEnrollment();
   const { data: tiers } = useTuitionTiers(schooljaarId ?? null);
@@ -48,6 +53,16 @@ export function EnrollmentSheet({ item, onClose, schooljaarId, placement }: {
   const onDelete = () => {
     if (!confirm(`Inschrijving van ${item.child_name} definitief verwijderen? Dit verwijdert ook de gekoppelde ouders en plaatsing.`)) return;
     del.mutate([item.id], { onSuccess: () => { toast("Inschrijving verwijderd"); onClose(); }, onError: () => toast("Verwijderen mislukt") });
+  };
+
+  const onDuplicate = async () => {
+    try {
+      const duplicated = await duplicate.mutateAsync(item.id);
+      toast(`Inschrijving van ${item.child_name} gedupliceerd`);
+      onDuplicated?.(duplicated);
+    } catch (error) {
+      toast("Dupliceren mislukt: " + (error instanceof Error ? error.message : "onbekend"));
+    }
   };
 
   // ---- Financiën (alleen met schooljaar-context) ----
@@ -281,9 +296,12 @@ export function EnrollmentSheet({ item, onClose, schooljaarId, placement }: {
             </div>
           </div>
 
-          {/* ---- Verwijderen ---- */}
-          <div style={{ borderTop: "1px solid var(--border)", paddingTop: 16 }}>
+          {/* ---- Verwijderen / dupliceren ---- */}
+          <div className="flex items-center gap-2" style={{ borderTop: "1px solid var(--border)", paddingTop: 16 }}>
             <Btn kind="danger" icon="trash" disabled={del.isPending} onClick={onDelete}>Inschrijving verwijderen</Btn>
+            <Btn icon="copy" disabled={duplicate.isPending} onClick={() => void onDuplicate()}>
+              {duplicate.isPending ? "Dupliceren…" : "Dupliceren"}
+            </Btn>
           </div>
         </div>
       </div>

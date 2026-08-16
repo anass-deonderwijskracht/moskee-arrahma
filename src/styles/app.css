@@ -122,6 +122,7 @@
 }
 .intake-kicker { text-transform: uppercase; letter-spacing: 0.055em; margin-bottom: 5px; }
 .intake-description { white-space: pre-wrap; max-width: 760px; line-height: 1.65; }
+.intake-overview-description { max-width: 420px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .intake-meta-card {
   background: var(--bg-sunken);
   border: 1px solid var(--border);

@@ -230,7 +230,7 @@ export function EnrollmentsScreen() {
         )}
       </Section>
 
-      {selected && <EnrollmentSheet key={selected.id} item={items.find((e) => e.id === selected.id) ?? selected} placement={(placements ?? {})[selected.id] ?? null} schooljaarId={financeSj} onClose={() => setSelected(null)} />}
+      {selected && <EnrollmentSheet key={selected.id} item={items.find((e) => e.id === selected.id) ?? selected} placement={(placements ?? {})[selected.id] ?? null} schooljaarId={financeSj} onClose={() => setSelected(null)} onDuplicated={setSelected} />}
       {newTrack && <NewEnrollmentModal track={newTrack} onClose={() => setNewTrack(null)} />}
     </>
   );
