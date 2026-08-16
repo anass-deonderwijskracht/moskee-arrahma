@@ -30,8 +30,8 @@ const baseData: PublicIntake = {
     allow_other: true,
   },
   enrollments: [
-    { id: "child-1", first_name: "Yasmin" },
-    { id: "child-2", first_name: "Adam" },
+    { id: "child-1", first_name: "Yasmin", preferred_lesday: "Zaterdag" },
+    { id: "child-2", first_name: "Adam", preferred_lesday: "Geen voorkeur" },
   ],
   slots: [{ id: "slot-1", date: "2026-09-07", start_time: "09:00:00", end_time: "12:00:00" }],
   selection: null,
@@ -59,6 +59,7 @@ describe("PublicIntakePage", () => {
 
     fireEvent.click(screen.getByRole("checkbox", { name: "Yasmin" }));
     fireEvent.click(screen.getByRole("checkbox", { name: "Adam" }));
+    fireEvent.change(screen.getAllByLabelText("Voorkeursdag")[1], { target: { value: "Zondag" } });
     fireEvent.click(screen.getByRole("radio", { name: /maandag 7 september 2026/i }));
     fireEvent.change(screen.getByLabelText("Opmerkingen"), { target: { value: "Graag samen inplannen." } });
     fireEvent.click(screen.getByRole("button", { name: "Voorkeur opslaan" }));
@@ -68,6 +69,7 @@ describe("PublicIntakePage", () => {
       slotId: "slot-1",
       otherText: null,
       note: "Graag samen inplannen.",
+      lessonDayPreferences: { "child-1": "Zaterdag", "child-2": "Zondag" },
     }));
   });
 
@@ -87,7 +89,10 @@ describe("PublicIntakePage", () => {
     renderPage();
 
     expect(screen.getByRole("heading", { name: "Bedankt" })).toBeInTheDocument();
-    expect(screen.getByText("Yasmin, Adam")).toBeInTheDocument();
+    expect(screen.getByText("Yasmin")).toBeInTheDocument();
+    expect(screen.getByText("Adam")).toBeInTheDocument();
+    expect(screen.getByText("Zaterdag")).toBeInTheDocument();
+    expect(screen.getByText("Geen voorkeur")).toBeInTheDocument();
     expect(screen.getByText("Graag samen inplannen.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Voorkeur wijzigen" })).toBeEnabled();
   });

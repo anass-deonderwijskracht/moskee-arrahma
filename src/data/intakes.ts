@@ -7,6 +7,7 @@ export const FIXED_INTAKE_END = "12:00";
 export const DEFAULT_INTAKE_MESSAGE = "Beste ouder,\n\nHierbij uw persoonlijke link voor het intakeformulier: [link]";
 
 export type IntakeStatus = "concept" | "actief" | "verlopen";
+export type LessonDayPreference = "Zaterdag" | "Zondag" | "Geen voorkeur";
 export type IntakeSlot = Tables<"intake_slots">;
 export type IntakeChoice = Tables<"intake_choices"> & {
   enrollments: { child_name: string } | null;
@@ -41,7 +42,7 @@ export type SaveIntakeMomentInput = {
 
 export type PublicIntake = {
   moment: { id: string; description: string; duration_text: string; allow_other: boolean };
-  enrollments: { id: string; first_name: string }[];
+  enrollments: { id: string; first_name: string; preferred_lesday: LessonDayPreference }[];
   slots: Pick<IntakeSlot, "id" | "date" | "start_time" | "end_time">[];
   selection: {
     enrollment_ids: string[];
@@ -273,7 +274,7 @@ export function usePublicIntake(token: string | undefined) {
     enabled: !!token,
     retry: false,
     queryFn: async (): Promise<PublicIntake | null> => {
-      const { data, error } = await supabase.rpc("get_public_intake", { p_token: token! });
+      const { data, error } = await supabase.rpc("get_public_intake_with_preferences", { p_token: token! });
       if (error) throw error;
       return (data as unknown as PublicIntake | null) ?? null;
     },
@@ -283,18 +284,20 @@ export function usePublicIntake(token: string | undefined) {
 export function useSubmitPublicIntake(token: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ enrollmentIds, slotId, otherText, note }: {
+    mutationFn: async ({ enrollmentIds, slotId, otherText, note, lessonDayPreferences }: {
       enrollmentIds: string[];
       slotId: string | null;
       otherText: string | null;
       note: string | null;
+      lessonDayPreferences: Record<string, LessonDayPreference>;
     }): Promise<PublicIntake> => {
-      const { data, error } = await supabase.rpc("submit_public_intake", {
+      const { data, error } = await supabase.rpc("submit_public_intake_with_preferences", {
         p_token: token,
         p_enrollment_ids: enrollmentIds,
         p_slot_id: slotId,
         p_other_text: otherText,
         p_note: note,
+        p_lesson_day_preferences: lessonDayPreferences,
       });
       if (error) throw error;
       return data as unknown as PublicIntake;

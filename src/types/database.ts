@@ -368,6 +368,7 @@ export interface Database {
     Functions: {
       finalize_enrollment: { Args: { p_placement_id: string }; Returns: string };
       get_public_intake: { Args: { p_token: string }; Returns: Json };
+      get_public_intake_with_preferences: { Args: { p_token: string }; Returns: Json };
       is_admin: { Args: Record<string, never>; Returns: boolean };
       submit_public_intake: {
         Args: {
@@ -376,6 +377,17 @@ export interface Database {
           p_slot_id: string | null;
           p_other_text: string | null;
           p_note: string | null;
+        };
+        Returns: Json;
+      };
+      submit_public_intake_with_preferences: {
+        Args: {
+          p_token: string;
+          p_enrollment_ids: string[];
+          p_slot_id: string | null;
+          p_other_text: string | null;
+          p_note: string | null;
+          p_lesson_day_preferences: Json;
         };
         Returns: Json;
       };

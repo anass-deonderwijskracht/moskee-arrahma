@@ -1,10 +1,16 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useParams } from "react-router-dom";
 import { Icon } from "@/components/ui";
-import { usePublicIntake, useSubmitPublicIntake, type PublicIntake } from "@/data/intakes";
+import {
+  usePublicIntake,
+  useSubmitPublicIntake,
+  type LessonDayPreference,
+  type PublicIntake,
+} from "@/data/intakes";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const OTHER_VALUE = "__other__";
+const LESSON_DAYS: LessonDayPreference[] = ["Zaterdag", "Zondag", "Geen voorkeur"];
 
 function dateLabel(date: string) {
   return new Date(`${date}T12:00:00`).toLocaleDateString("nl-NL", {
@@ -26,6 +32,7 @@ export function PublicIntakePage() {
   const { data, isLoading, isError } = usePublicIntake(safeToken);
   const submit = useSubmitPublicIntake(safeToken ?? "");
   const [selectedChildren, setSelectedChildren] = useState<string[]>([]);
+  const [lessonDays, setLessonDays] = useState<Record<string, LessonDayPreference>>({});
   const [selected, setSelected] = useState("");
   const [otherText, setOtherText] = useState("");
   const [note, setNote] = useState("");
@@ -34,6 +41,10 @@ export function PublicIntakePage() {
   useEffect(() => {
     if (!data) return;
     setSelectedChildren(data.selection?.enrollment_ids ?? []);
+    setLessonDays(Object.fromEntries(data.enrollments.map((enrollment) => [
+      enrollment.id,
+      enrollment.preferred_lesday ?? "Geen voorkeur",
+    ])));
     setNote(data.selection?.note ?? "");
     if (data.selection?.other_text) {
       setSelected(OTHER_VALUE);
@@ -64,6 +75,7 @@ export function PublicIntakePage() {
         slotId: choosingOther ? null : selected,
         otherText: choosingOther ? otherText.trim() : null,
         note: note.trim() || null,
+        lessonDayPreferences: Object.fromEntries(selectedChildren.map((id) => [id, lessonDays[id] ?? "Geen voorkeur"])),
       });
       setEditing(false);
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -109,7 +121,11 @@ export function PublicIntakePage() {
               <Icon name="users" size={18} />
               <div>
                 <span>{savedChildren.length === 1 ? "Kind" : "Kinderen"}</span>
-                <strong>{savedChildren.map((child) => child.first_name).join(", ")}</strong>
+                <div className="public-intake-confirm-children">
+                  {savedChildren.map((child) => (
+                    <strong key={child.id}>{child.first_name}<small>{child.preferred_lesday}</small></strong>
+                  ))}
+                </div>
               </div>
             </div>
             <div className="public-intake-confirm-slot">
@@ -149,11 +165,25 @@ export function PublicIntakePage() {
             {data.enrollments.map((enrollment) => {
               const checked = selectedChildren.includes(enrollment.id);
               return (
-                <label className={`public-intake-child${checked ? " selected" : ""}`} key={enrollment.id}>
-                  <input type="checkbox" checked={checked} onChange={() => toggleChild(enrollment.id)} />
-                  <span className="public-intake-checkbox" aria-hidden="true"><Icon name="check" size={13} /></span>
-                  <strong>{enrollment.first_name}</strong>
-                </label>
+                <div className={`public-intake-child-group${checked ? " selected" : ""}`} key={enrollment.id}>
+                  <label className={`public-intake-child${checked ? " selected" : ""}`}>
+                    <input type="checkbox" checked={checked} onChange={() => toggleChild(enrollment.id)} />
+                    <span className="public-intake-checkbox" aria-hidden="true"><Icon name="check" size={13} /></span>
+                    <strong>{enrollment.first_name}</strong>
+                  </label>
+                  {checked && (
+                    <div className="public-intake-lesson-day">
+                      <label htmlFor={`lesson-day-${enrollment.id}`}>Voorkeursdag</label>
+                      <select id={`lesson-day-${enrollment.id}`} value={lessonDays[enrollment.id] ?? "Geen voorkeur"}
+                        onChange={(event) => setLessonDays((current) => ({
+                          ...current,
+                          [enrollment.id]: event.target.value as LessonDayPreference,
+                        }))}>
+                        {LESSON_DAYS.map((day) => <option key={day} value={day}>{day}</option>)}
+                      </select>
+                    </div>
+                  )}
+                </div>
               );
             })}
           </div>
