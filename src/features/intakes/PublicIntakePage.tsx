@@ -115,7 +115,7 @@ export function PublicIntakePage() {
         <div className="public-intake-confirm">
           <div className="public-intake-saved"><Icon name="check" size={15} /> Voorkeur opgeslagen</div>
           <h1>Bedankt</h1>
-          <p>De intakevoorkeur is ontvangen.</p>
+          <p className="public-intake-thank-you">{data.moment.thank_you_text}</p>
           <div className="public-intake-confirm-grid">
             <div className="public-intake-confirm-slot">
               <Icon name="users" size={18} />
@@ -159,8 +159,8 @@ export function PublicIntakePage() {
 
       <div className="public-intake-form">
         <fieldset className="public-intake-section">
-          <legend><span>1</span> Om welke kinderen gaat het?</legend>
-          <p>Selecteer één of meerdere kinderen. De afspraak duurt even lang, ongeacht het aantal kinderen.</p>
+          <legend><span>1</span> Welke kinderen wilt u inschrijven? Vink alle kinderen aan die u wilt inschrijven.</legend>
+          <p>De afspraak duurt even lang, ongeacht het aantal kinderen.</p>
           <div className="public-intake-children">
             {data.enrollments.map((enrollment) => {
               const checked = selectedChildren.includes(enrollment.id);

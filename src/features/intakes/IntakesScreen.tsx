@@ -7,6 +7,7 @@ import {
   useDeleteIntakeMoment,
   useDeleteIntakeChoices,
   DEFAULT_INTAKE_MESSAGE,
+  DEFAULT_INTAKE_THANK_YOU_TEXT,
   FIXED_INTAKE_END,
   FIXED_INTAKE_START,
   useIntakeMoments,
@@ -301,6 +302,7 @@ function IntakeMomentModal({ initial, onClose }: { initial: Partial<IntakeMoment
   const [status, setStatus] = useState<IntakeStatus>((initial.status as IntakeStatus | undefined) ?? "concept");
   const [allowOther, setAllowOther] = useState(initial.allow_other ?? false);
   const [messageTemplate, setMessageTemplate] = useState(initial.message_template ?? DEFAULT_INTAKE_MESSAGE);
+  const [thankYouText, setThankYouText] = useState(initial.thank_you_text ?? DEFAULT_INTAKE_THANK_YOU_TEXT);
   const [slots, setSlots] = useState<IntakeSlotInput[]>(() =>
     initial.intake_slots?.length
       ? initial.intake_slots.map((slot, position) => ({
@@ -326,7 +328,8 @@ function IntakeMomentModal({ initial, onClose }: { initial: Partial<IntakeMoment
     setSlots((current) => current.filter((_, i) => i !== index));
   };
 
-  const valid = description.trim() && duration.trim() && messageTemplate.trim() && messageTemplate.length <= 5000 && slots.length > 0
+  const valid = description.trim() && duration.trim() && messageTemplate.trim() && messageTemplate.length <= 5000
+    && thankYouText.trim() && thankYouText.length <= 2000 && slots.length > 0
     && slots.every((slot) => slot.date);
 
   const onSave = async () => {
@@ -339,6 +342,7 @@ function IntakeMomentModal({ initial, onClose }: { initial: Partial<IntakeMoment
         status,
         allow_other: allowOther,
         message_template: messageTemplate,
+        thank_you_text: thankYouText,
         slots,
       });
       toast(initial.id ? "Intakemoment bijgewerkt" : "Intakemoment aangemaakt");
@@ -362,6 +366,10 @@ function IntakeMomentModal({ initial, onClose }: { initial: Partial<IntakeMoment
       <Field label="Bericht voor ouders">
         <textarea className="textarea" rows={5} maxLength={5000} value={messageTemplate} onChange={(event) => setMessageTemplate(event.target.value)} />
         <div className="text-xs text-subtle mt-1">Gebruik <code>[link]</code> op de plek waar de persoonlijke intakeformulierlink moet komen.</div>
+      </Field>
+      <Field label="Tekst op bedanktscherm">
+        <textarea className="textarea" rows={3} maxLength={2000} value={thankYouText} onChange={(event) => setThankYouText(event.target.value)} />
+        <div className="text-xs text-subtle mt-1">Deze tekst verschijnt nadat de ouder de intakevoorkeur heeft opgeslagen.</div>
       </Field>
       <div className="grid-2" style={{ gridTemplateColumns: "2fr 1fr" }}>
         <Field label="Duur van een intake">

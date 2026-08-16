@@ -227,7 +227,7 @@ export interface Database {
       intake_moments: {
         Row: {
           id: string; description: string; duration_text: string;
-          status: string; allow_other: boolean; message_template: string;
+          status: string; allow_other: boolean; message_template: string; thank_you_text: string;
           created_at: string; updated_at: string;
         };
         Insert: { description: string; duration_text: string } & Partial<Database["public"]["Tables"]["intake_moments"]["Row"]>;

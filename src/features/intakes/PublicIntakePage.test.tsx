@@ -28,6 +28,7 @@ const baseData: PublicIntake = {
     description: "Kies een geschikt moment voor de intake.",
     duration_text: "ongeveer 20 minuten",
     allow_other: true,
+    thank_you_text: "Bedankt, wij nemen binnenkort contact met u op.",
   },
   enrollments: [
     { id: "child-1", first_name: "Yasmin", preferred_lesday: "Zaterdag" },
@@ -57,6 +58,7 @@ describe("PublicIntakePage", () => {
   it("slaat meerdere kinderen, één moment en opmerkingen gezamenlijk op", async () => {
     renderPage();
 
+    expect(screen.getByText("Welke kinderen wilt u inschrijven? Vink alle kinderen aan die u wilt inschrijven.")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("checkbox", { name: "Yasmin" }));
     fireEvent.click(screen.getByRole("checkbox", { name: "Adam" }));
     fireEvent.change(screen.getAllByLabelText("Voorkeursdag")[1], { target: { value: "Zondag" } });
@@ -89,6 +91,7 @@ describe("PublicIntakePage", () => {
     renderPage();
 
     expect(screen.getByRole("heading", { name: "Bedankt" })).toBeInTheDocument();
+    expect(screen.getByText("Bedankt, wij nemen binnenkort contact met u op.")).toBeInTheDocument();
     expect(screen.getByText("Yasmin")).toBeInTheDocument();
     expect(screen.getByText("Adam")).toBeInTheDocument();
     expect(screen.getByText("Zaterdag")).toBeInTheDocument();

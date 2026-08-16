@@ -263,6 +263,7 @@
 .public-intake-error { margin-top: 13px; padding: 10px 12px; color: #8e3b31; background: #faefed; border-radius: 6px; font-size: 13px; }
 .public-intake-confirm, .public-intake-state { padding: 38px 32px; }
 .public-intake-confirm > p, .public-intake-state > p { color: #5d696a; max-width: 520px; font-size: 14px; line-height: 1.6; margin: 8px 0 22px; }
+.public-intake-confirm > .public-intake-thank-you { white-space: pre-wrap; }
 .public-intake-saved { display: inline-flex; align-items: center; gap: 6px; color: #277154; font-size: 12.5px; font-weight: 600; margin-bottom: 12px; }
 .public-intake-state .spinner { margin-bottom: 14px; }
 .public-intake-confirm-grid { width: min(100%, 520px); display: grid; gap: 9px; margin-bottom: 16px; }

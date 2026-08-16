@@ -5,6 +5,7 @@ import type { Tables } from "@/types/database";
 export const FIXED_INTAKE_START = "09:00";
 export const FIXED_INTAKE_END = "12:00";
 export const DEFAULT_INTAKE_MESSAGE = "Beste ouder,\n\nHierbij uw persoonlijke link voor het intakeformulier: [link]";
+export const DEFAULT_INTAKE_THANK_YOU_TEXT = "De intakevoorkeur is ontvangen.";
 
 export type IntakeStatus = "concept" | "actief" | "verlopen";
 export type LessonDayPreference = "Zaterdag" | "Zondag" | "Geen voorkeur";
@@ -37,11 +38,18 @@ export type SaveIntakeMomentInput = {
   status: IntakeStatus;
   allow_other: boolean;
   message_template: string;
+  thank_you_text: string;
   slots: IntakeSlotInput[];
 };
 
 export type PublicIntake = {
-  moment: { id: string; description: string; duration_text: string; allow_other: boolean };
+  moment: {
+    id: string;
+    description: string;
+    duration_text: string;
+    allow_other: boolean;
+    thank_you_text: string;
+  };
   enrollments: { id: string; first_name: string; preferred_lesday: LessonDayPreference }[];
   slots: Pick<IntakeSlot, "id" | "date" | "start_time" | "end_time">[];
   selection: {
@@ -111,6 +119,7 @@ export function useSaveIntakeMoment() {
         status: input.status,
         allow_other: input.allow_other,
         message_template: input.message_template.trim(),
+        thank_you_text: input.thank_you_text.trim(),
       };
 
       if (momentId) {
