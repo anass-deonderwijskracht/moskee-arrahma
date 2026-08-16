@@ -9,7 +9,7 @@ import { useSetLesgeldOverride } from "@/data/tuition";
 import { ENROLL_COLUMNS } from "@/data/dashboard";
 import { age, ageLabel } from "@/data/age";
 import { EnrollmentSheet } from "@/features/enrollments/EnrollmentSheet";
-import { useActiveIntakeOverview, type ActiveIntakeSelection } from "@/data/intakes";
+import { renderIntakeMessage, useIntakeMoments, useSetIntakeAttendance, type IntakeChoice } from "@/data/intakes";
 
 type Track = "all" | "regulier" | "hifdh";
 type SortKey = "date" | "name" | "status" | "lesday" | "age" | "intake" | "klas" | "niveau" | "lesgeld";
@@ -34,6 +34,41 @@ function dateTimeNL(iso: string | null): string {
   return d.toLocaleDateString("nl-NL", { day: "numeric", month: "short", year: "numeric" }) + " · " + d.toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit" });
 }
 
+function intakeMomentLabel(description: string, status: string, createdAt: string): string {
+  const date = new Date(createdAt).toLocaleDateString("nl-NL", { day: "numeric", month: "short", year: "numeric" });
+  const normalizedDescription = description.replace(/\s+/g, " ").trim();
+  const shortDescription = normalizedDescription.length > 52 ? `${normalizedDescription.slice(0, 49)}…` : normalizedDescription;
+  return `${status === "actief" ? "Actief" : status === "verlopen" ? "Verlopen" : "Concept"} · ${date} · ${shortDescription}`;
+}
+
+async function copyText(value: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(value);
+    return true;
+  } catch {
+    const input = document.createElement("textarea");
+    input.value = value;
+    input.style.position = "fixed";
+    input.style.opacity = "0";
+    document.body.appendChild(input);
+    input.select();
+    const copied = document.execCommand("copy");
+    input.remove();
+    return copied;
+  }
+}
+
+function ParentCell({ parent }: { parent: Enrollment["enrollment_parents"][number] | undefined }) {
+  if (!parent) return <span className="text-subtle">—</span>;
+  return (
+    <div className="intake-parent-cell">
+      <div className="font-semibold text-sm">{parent.name || "Naam onbekend"}</div>
+      <div className="text-xs text-subtle">{parent.phone || "Geen telefoonnummer"}</div>
+      {parent.is_primary && <span className="intake-primary-parent"><Icon name="check" size={11} /> Primair</span>}
+    </div>
+  );
+}
+
 export function Klassenindeler({ enrollments }: { enrollments: Enrollment[] }) {
   const toast = useToast();
   const { data: schooljaren } = useSchooljaren();
@@ -49,16 +84,18 @@ export function Klassenindeler({ enrollments }: { enrollments: Enrollment[] }) {
   // Klikken op een klas-tegel filtert de lijst eronder; nog een klik zet 'm uit.
   const [classFilter, setClassFilter] = useState<string | null>(null);
   const [selected, setSelected] = useState<Enrollment | null>(null);
+  const [selectedIntakeId, setSelectedIntakeId] = useState("");
   const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" }>({ key: "date", dir: "asc" });
 
   const { data: classes, isLoading: classesLoading } = useClasses(effectiveSj);
   const { data: placements } = usePlacements(effectiveSj);
-  const { data: activeIntake } = useActiveIntakeOverview();
+  const { data: intakeMoments } = useIntakeMoments();
   const upsert = useUpsertPlacement();
   const finalize = useFinalizeEnrollment();
   const updateLeerling = useUpdateFinalizedLeerling();
   const updateStatus = useUpdateEnrollmentStatus();
   const toggleTwijfel = useToggleTwijfel();
+  const setIntakeAttendance = useSetIntakeAttendance();
   const setOverride = useSetLesgeldOverride();
 
   // Onthoudt per inschrijving de status van vóór de klik, zodat een tweede klik
@@ -77,11 +114,17 @@ export function Klassenindeler({ enrollments }: { enrollments: Enrollment[] }) {
   };
 
   const pmap = placements ?? {};
+  const selectedIntake = (intakeMoments ?? []).find((moment) => moment.id === selectedIntakeId) ?? null;
   const intakeByEnrollment = useMemo(() => {
-    const map: Record<string, ActiveIntakeSelection> = {};
-    for (const choice of activeIntake?.intake_choices ?? []) map[choice.enrollment_id] = choice;
+    const map: Record<string, IntakeChoice> = {};
+    for (const choice of selectedIntake?.intake_choices ?? []) map[choice.enrollment_id] = choice;
     return map;
-  }, [activeIntake]);
+  }, [selectedIntake]);
+  const intakeAttendanceByEnrollment = useMemo(() => {
+    const map: Record<string, boolean> = {};
+    for (const attendance of selectedIntake?.intake_attendance ?? []) map[attendance.enrollment_id] = attendance.attended;
+    return map;
+  }, [selectedIntake]);
   // Eén op naam gesorteerde lijst voor zowel de tegels als de keuzelijst per rij.
   const sortedClasses = useMemo(() => [...(classes ?? [])].sort(byCode), [classes]);
   const klassen = useMemo(() => sortedClasses.filter((c) => track === "all" || c.track === track), [sortedClasses, track]);
@@ -174,23 +217,19 @@ export function Klassenindeler({ enrollments }: { enrollments: Enrollment[] }) {
     return next.size === 0 ? new Set([id]) : next; // never empty
   });
 
+  const intakeLink = (enrollment: Enrollment) => `${window.location.origin}/intake/${enrollment.intake_access_token}`;
+
   const copyIntakeLink = async (enrollment: Enrollment) => {
-    if (!activeIntake || !enrollment.intake_access_token) return;
-    const link = `${window.location.origin}/intake/${enrollment.intake_access_token}`;
-    try {
-      await navigator.clipboard.writeText(link);
-      toast(`Ouderlink voor het gezin van ${enrollment.child_name} gekopieerd`);
-    } catch {
-      const input = document.createElement("textarea");
-      input.value = link;
-      input.style.position = "fixed";
-      input.style.opacity = "0";
-      document.body.appendChild(input);
-      input.select();
-      const copied = document.execCommand("copy");
-      input.remove();
-      toast(copied ? `Ouderlink voor het gezin van ${enrollment.child_name} gekopieerd` : "Kopiëren is niet gelukt");
-    }
+    if (selectedIntake?.status !== "actief" || !enrollment.intake_access_token) return;
+    const copied = await copyText(intakeLink(enrollment));
+    toast(copied ? `Ouderlink voor het gezin van ${enrollment.child_name} gekopieerd` : "Kopiëren is niet gelukt");
+  };
+
+  const copyIntakeMessage = async (enrollment: Enrollment) => {
+    if (selectedIntake?.status !== "actief" || !enrollment.intake_access_token) return;
+    const message = renderIntakeMessage(selectedIntake.message_template, intakeLink(enrollment));
+    const copied = await copyText(message);
+    toast(copied ? `Volledig bericht voor ${enrollment.child_name} gekopieerd` : "Kopiëren is niet gelukt");
   };
 
   const trackPills: Option<Track>[] = [
@@ -261,7 +300,22 @@ export function Klassenindeler({ enrollments }: { enrollments: Enrollment[] }) {
         )}
       </Card>
 
-      <Card className="scroll-x" title={<><Icon name="list" size={14} /> Inschrijvingen indelen</>} sub="Alle inschrijvingen — filter op status om optimaal in te delen. Wijzigingen worden direct doorgevoerd (ook na definitief).">
+      <Card
+        className="scroll-x"
+        title={<><Icon name="list" size={14} /> Inschrijvingen indelen</>}
+        sub="Alle inschrijvingen — filter op status om optimaal in te delen. Wijzigingen worden direct doorgevoerd (ook na definitief)."
+        action={(
+          <div className="intake-table-picker">
+            <label htmlFor="klassenindeler-intake">Intake</label>
+            <Select id="klassenindeler-intake" value={selectedIntakeId} onChange={(event) => setSelectedIntakeId(event.target.value)}>
+              <option value="">Geen intake geselecteerd</option>
+              {(intakeMoments ?? []).map((moment) => (
+                <option key={moment.id} value={moment.id}>{intakeMomentLabel(moment.description, moment.status, moment.created_at)}</option>
+              ))}
+            </Select>
+          </div>
+        )}
+      >
         <div className="flex items-center gap-2 mb-3" style={{ flexWrap: "wrap" }}>
           <span className="text-xs text-subtle font-semibold" style={{ textTransform: "uppercase", letterSpacing: "0.05em" }}>Status:</span>
           {ENROLL_COLUMNS.map((c) => {
@@ -294,13 +348,20 @@ export function Klassenindeler({ enrollments }: { enrollments: Enrollment[] }) {
             </button>
           )}
         </div>
-        <table className="table" style={{ minWidth: 1300 }}>
+        <table className="table" style={{ minWidth: selectedIntake ? 2050 : 1180 }}>
           <thead><tr>
             <Th label="Inschrijving" k="date" sort={sort} onSort={toggleSort} />
             <Th label="Status" k="status" sort={sort} onSort={toggleSort} />
             <Th label="Voorkeur lesdag" k="lesday" sort={sort} onSort={toggleSort} />
             <Th label="Leeftijd" k="age" sort={sort} onSort={toggleSort} />
-            <Th label="Intake" k="intake" sort={sort} onSort={toggleSort} />
+            {selectedIntake && <>
+              <th>Ouder 1</th>
+              <th>Ouder 2</th>
+              <Th label="Gekozen intake" k="intake" sort={sort} onSort={toggleSort} />
+              <th>Bericht</th>
+              <th>Link</th>
+              <th>Aanwezig</th>
+            </>}
             <Th label="Klas" k="klas" sort={sort} onSort={toggleSort} />
             <Th label="Niveau" k="niveau" sort={sort} onSort={toggleSort} />
             <Th label="Lesgeld betaald" k="lesgeld" sort={sort} onSort={toggleSort} />
@@ -312,6 +373,12 @@ export function Klassenindeler({ enrollments }: { enrollments: Enrollment[] }) {
               const isDef = !!p.definitief;
               const blockers = finalizeBlockers(p as Placement);
               const eligible = sortedClasses.filter((c) => (e.track === "hifdh" ? c.track === "hifdh" : c.track !== "hifdh"));
+              const parents = [...e.enrollment_parents].sort((a, b) =>
+                Number(b.is_primary) - Number(a.is_primary)
+                || (a.role ?? a.name ?? "").localeCompare(b.role ?? b.name ?? "", "nl"));
+              const intakeChoice = intakeByEnrollment[e.id];
+              const intakeCanBeShared = selectedIntake?.status === "actief" && !!e.intake_access_token;
+              const attended = intakeAttendanceByEnrollment[e.id] ?? false;
               return (
                 <tr key={e.id} onClick={() => setSelected(e)} style={{ background: ROW_BG[e.status] ?? "transparent", cursor: "pointer" }} title="Open inschrijving">
                   <td>
@@ -326,25 +393,46 @@ export function Klassenindeler({ enrollments }: { enrollments: Enrollment[] }) {
                   </td>
                   <td>{e.preferred_lesday ? <Badge kind={e.preferred_lesday === "Geen voorkeur" ? "default" : "info"}>{e.preferred_lesday}</Badge> : <span className="text-subtle">—</span>}</td>
                   <td className="num">{ageLabel(e, { approx: true })}</td>
-                  <td onClick={(ev) => ev.stopPropagation()}>
-                    <div className="intake-enrollment-cell">
-                      {intakeByEnrollment[e.id]?.intake_slots ? (
+                  {selectedIntake && <>
+                    <td><ParentCell parent={parents[0]} /></td>
+                    <td><ParentCell parent={parents[1]} /></td>
+                    <td>
+                      {intakeChoice?.intake_slots ? (
                         <div>
-                          <div className="font-semibold text-sm">{new Date(`${intakeByEnrollment[e.id].intake_slots!.date}T12:00:00`).toLocaleDateString("nl-NL", { day: "numeric", month: "short" })}</div>
-                          <div className="text-xs text-subtle">{intakeByEnrollment[e.id].intake_slots!.start_time.slice(0, 5)} – {intakeByEnrollment[e.id].intake_slots!.end_time.slice(0, 5)}</div>
+                          <div className="font-semibold text-sm">{new Date(`${intakeChoice.intake_slots.date}T12:00:00`).toLocaleDateString("nl-NL", { day: "numeric", month: "short", year: "numeric" })}</div>
+                          <div className="text-xs text-subtle">{intakeChoice.intake_slots.start_time.slice(0, 5)} – {intakeChoice.intake_slots.end_time.slice(0, 5)}</div>
                         </div>
-                      ) : intakeByEnrollment[e.id]?.other_text ? (
-                        <div title={intakeByEnrollment[e.id].other_text ?? undefined} style={{ maxWidth: 125 }}>
+                      ) : intakeChoice?.other_text ? (
+                        <div title={intakeChoice.other_text} style={{ maxWidth: 150 }}>
                           <div className="font-semibold text-sm">Anders</div>
-                          <div className="text-xs text-subtle truncate">{intakeByEnrollment[e.id].other_text}</div>
+                          <div className="text-xs text-subtle truncate">{intakeChoice.other_text}</div>
                         </div>
                       ) : <span className="text-xs text-subtle">Nog niet gekozen</span>}
-                      <Btn size="sm" kind="ghost" icon="copy" disabled={!activeIntake || !e.intake_access_token}
-                        title={activeIntake ? `Ouderlink voor het gezin van ${e.child_name} kopiëren` : "Er is geen actief intakemoment"}
-                        aria-label={`Ouderlink voor het gezin van ${e.child_name} kopiëren`}
-                        onClick={() => void copyIntakeLink(e)} />
-                    </div>
-                  </td>
+                    </td>
+                    <td onClick={(ev) => ev.stopPropagation()}>
+                      <Btn size="sm" icon="copy" disabled={!intakeCanBeShared}
+                        title={intakeCanBeShared ? "Volledig ingestelde ouderbericht kopiëren" : "Alleen beschikbaar voor de actieve intake"}
+                        aria-label={`Volledig intakebericht voor ${e.child_name} kopiëren`}
+                        onClick={() => void copyIntakeMessage(e)}>Bericht</Btn>
+                    </td>
+                    <td onClick={(ev) => ev.stopPropagation()}>
+                      <Btn size="sm" kind="ghost" icon="copy" disabled={!intakeCanBeShared}
+                        title={intakeCanBeShared ? "Alleen de persoonlijke link kopiëren" : "Alleen beschikbaar voor de actieve intake"}
+                        aria-label={`Intakelink voor ${e.child_name} kopiëren`}
+                        onClick={() => void copyIntakeLink(e)}>Link</Btn>
+                    </td>
+                    <td onClick={(ev) => ev.stopPropagation()}>
+                      <label className="intake-attendance-check">
+                        <input type="checkbox" checked={attended} disabled={setIntakeAttendance.isPending}
+                          onChange={(event) => setIntakeAttendance.mutate({
+                            intakeMomentId: selectedIntake.id,
+                            enrollmentId: e.id,
+                            attended: event.target.checked,
+                          }, { onError: () => toast("Aanwezigheid opslaan mislukt") })} />
+                        <span>{attended ? "Ja" : "Nee"}</span>
+                      </label>
+                    </td>
+                  </>}
                   <td onClick={(ev) => ev.stopPropagation()}>
                     <Select value={p.class_id ?? ""} style={{ minWidth: 150 }} onChange={(ev) => patch(e, { class_id: ev.target.value || null })}>
                       <option value="">— kies klas —</option>
@@ -390,7 +478,7 @@ export function Klassenindeler({ enrollments }: { enrollments: Enrollment[] }) {
                 </tr>
               );
             })}
-            {indelen.length === 0 && <tr><td colSpan={9}><div className="empty">Geen inschrijvingen voor deze filter.</div></td></tr>}
+            {indelen.length === 0 && <tr><td colSpan={selectedIntake ? 14 : 8}><div className="empty">Geen inschrijvingen voor deze filter.</div></td></tr>}
           </tbody>
         </table>
       </Card>

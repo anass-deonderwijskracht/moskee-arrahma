@@ -6,6 +6,7 @@ import { ErrorState, Loading } from "@/features/_shared/states";
 import {
   useDeleteIntakeMoment,
   useDeleteIntakeChoices,
+  DEFAULT_INTAKE_MESSAGE,
   FIXED_INTAKE_END,
   FIXED_INTAKE_START,
   useIntakeMoments,
@@ -27,6 +28,7 @@ const STATUS_KIND = { concept: "default", actief: "success", verlopen: "warn" } 
 type IntakeResponse = {
   id: string;
   choices: IntakeMoment["intake_choices"];
+  children: { id: string; name: string; attended: boolean }[];
   childNames: string[];
   intakeSlotId: string | null;
   otherText: string | null;
@@ -34,7 +36,7 @@ type IntakeResponse = {
   updatedAt: string;
 };
 
-function groupResponses(choices: IntakeMoment["intake_choices"]): IntakeResponse[] {
+function groupResponses(choices: IntakeMoment["intake_choices"], attendedIds: Set<string>): IntakeResponse[] {
   const grouped = new Map<string, IntakeMoment["intake_choices"]>();
   for (const choice of choices) {
     const current = grouped.get(choice.response_group_id) ?? [];
@@ -44,11 +46,16 @@ function groupResponses(choices: IntakeMoment["intake_choices"]): IntakeResponse
 
   return [...grouped.entries()].map(([id, group]) => {
     const latest = [...group].sort((a, b) => b.updated_at.localeCompare(a.updated_at))[0];
+    const children = group.map((choice) => ({
+      id: choice.enrollment_id,
+      name: choice.enrollments?.child_name ?? "Onbekende inschrijving",
+      attended: attendedIds.has(choice.enrollment_id),
+    })).sort((a, b) => a.name.localeCompare(b.name, "nl"));
     return {
       id,
       choices: group,
-      childNames: group.map((choice) => choice.enrollments?.child_name ?? "Onbekende inschrijving")
-        .sort((a, b) => a.localeCompare(b, "nl")),
+      children,
+      childNames: children.map((child) => child.name),
       intakeSlotId: latest.intake_slot_id,
       otherText: latest.other_text,
       note: latest.note,
@@ -143,7 +150,8 @@ export function IntakesScreen() {
       ) : (
         <div className="flex-col gap-4">
           {moments.map((moment) => {
-            const responses = groupResponses(moment.intake_choices);
+            const attendedIds = new Set(moment.intake_attendance.filter((attendance) => attendance.attended).map((attendance) => attendance.enrollment_id));
+            const responses = groupResponses(moment.intake_choices, attendedIds);
             const responsesBySlot = new Map<string, IntakeResponse[]>();
             for (const response of responses) {
               if (!response.intakeSlotId) continue;
@@ -154,6 +162,9 @@ export function IntakesScreen() {
             const otherResponses = responses.filter((response) => !response.intakeSlotId && response.otherText);
             const otherChildCount = otherResponses.reduce((total, response) => total + response.childNames.length, 0);
             const slotById = new Map(moment.intake_slots.map((slot) => [slot.id, slot]));
+            const chosenEnrollmentIds = new Set(moment.intake_choices.map((choice) => choice.enrollment_id));
+            const attendeesWithoutChoice = moment.intake_attendance.filter((attendance) =>
+              attendance.attended && !chosenEnrollmentIds.has(attendance.enrollment_id));
             return (
               <Card
                 key={moment.id}
@@ -183,6 +194,11 @@ export function IntakesScreen() {
                     <span className="text-xs text-subtle">Reacties</span>
                     <strong>{responses.length} {responses.length === 1 ? "afspraak" : "afspraken"}</strong>
                     <span className="text-xs text-subtle">{moment.intake_choices.length} {moment.intake_choices.length === 1 ? "kind" : "kinderen"}</span>
+                  </div>
+                  <div className="intake-meta-card">
+                    <span className="text-xs text-subtle">Aanwezig</span>
+                    <strong>{attendedIds.size}</strong>
+                    <span className="text-xs text-subtle">kind{attendedIds.size === 1 ? "" : "eren"}</span>
                   </div>
                 </div>
 
@@ -230,8 +246,8 @@ export function IntakesScreen() {
                   </div>
                 </div>
                 <div className="scroll-x">
-                  <table className="table" style={{ minWidth: 860 }}>
-                    <thead><tr><th>Kinderen</th><th>Gekozen moment</th><th>Opmerkingen</th><th>Gekozen / gewijzigd op</th><th style={{ width: 1 }}></th></tr></thead>
+                  <table className="table" style={{ minWidth: 980 }}>
+                    <thead><tr><th>Kinderen</th><th>Gekozen moment</th><th>Opmerkingen</th><th>Aanwezig</th><th>Gekozen / gewijzigd op</th><th style={{ width: 1 }}></th></tr></thead>
                     <tbody>
                       {responses.map((response) => {
                         const slot = response.intakeSlotId ? slotById.get(response.intakeSlotId) : undefined;
@@ -242,12 +258,27 @@ export function IntakesScreen() {
                               ? `${dateLabel(slot.date)} · ${timeLabel(slot.start_time)} – ${timeLabel(slot.end_time)}`
                               : response.otherText ? `Anders: ${response.otherText}` : "—"}</td>
                             <td className="intake-response-note">{response.note || "—"}</td>
+                            <td><div className="flex-col gap-1">{response.children.map((child) => (
+                              <span className="text-xs flex items-center gap-1" key={child.id}>
+                                <Icon name={child.attended ? "check" : "x"} size={12} /> {child.name}
+                              </span>
+                            ))}</div></td>
                             <td className="text-subtle">{dateTimeLabel(response.updatedAt)}</td>
                             <td><Btn size="sm" kind="danger" icon="trash" disabled={removeChoice.isPending} onClick={() => void deleteChoice(response)}>Verwijderen</Btn></td>
                           </tr>
                         );
                       })}
-                      {responses.length === 0 && <tr><td colSpan={5}><div className="empty">Nog geen keuzes ontvangen.</div></td></tr>}
+                      {attendeesWithoutChoice.map((attendance) => (
+                        <tr key={`attendance-${attendance.enrollment_id}`}>
+                          <td className="font-semibold">{attendance.enrollments?.child_name ?? "Onbekende inschrijving"}</td>
+                          <td className="text-subtle">Geen keuze opgeslagen</td>
+                          <td>—</td>
+                          <td><span className="text-xs flex items-center gap-1"><Icon name="check" size={12} /> Aanwezig</span></td>
+                          <td className="text-subtle">{dateTimeLabel(attendance.updated_at)}</td>
+                          <td></td>
+                        </tr>
+                      ))}
+                      {responses.length === 0 && attendeesWithoutChoice.length === 0 && <tr><td colSpan={6}><div className="empty">Nog geen keuzes of aanwezigheid geregistreerd.</div></td></tr>}
                     </tbody>
                   </table>
                 </div>
@@ -269,6 +300,7 @@ function IntakeMomentModal({ initial, onClose }: { initial: Partial<IntakeMoment
   const [duration, setDuration] = useState(initial.duration_text ?? "");
   const [status, setStatus] = useState<IntakeStatus>((initial.status as IntakeStatus | undefined) ?? "concept");
   const [allowOther, setAllowOther] = useState(initial.allow_other ?? false);
+  const [messageTemplate, setMessageTemplate] = useState(initial.message_template ?? DEFAULT_INTAKE_MESSAGE);
   const [slots, setSlots] = useState<IntakeSlotInput[]>(() =>
     initial.intake_slots?.length
       ? initial.intake_slots.map((slot, position) => ({
@@ -294,7 +326,7 @@ function IntakeMomentModal({ initial, onClose }: { initial: Partial<IntakeMoment
     setSlots((current) => current.filter((_, i) => i !== index));
   };
 
-  const valid = description.trim() && duration.trim() && slots.length > 0
+  const valid = description.trim() && duration.trim() && messageTemplate.trim() && messageTemplate.length <= 5000 && slots.length > 0
     && slots.every((slot) => slot.date);
 
   const onSave = async () => {
@@ -306,6 +338,7 @@ function IntakeMomentModal({ initial, onClose }: { initial: Partial<IntakeMoment
         duration_text: duration,
         status,
         allow_other: allowOther,
+        message_template: messageTemplate,
         slots,
       });
       toast(initial.id ? "Intakemoment bijgewerkt" : "Intakemoment aangemaakt");
@@ -325,6 +358,10 @@ function IntakeMomentModal({ initial, onClose }: { initial: Partial<IntakeMoment
     >
       <Field label="Beschrijving">
         <textarea className="textarea" rows={4} value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Beschrijf wat de ouder en het kind kunnen verwachten en eventuele voorbereiding." />
+      </Field>
+      <Field label="Bericht voor ouders">
+        <textarea className="textarea" rows={5} maxLength={5000} value={messageTemplate} onChange={(event) => setMessageTemplate(event.target.value)} />
+        <div className="text-xs text-subtle mt-1">Gebruik <code>[link]</code> op de plek waar de persoonlijke intakeformulierlink moet komen.</div>
       </Field>
       <div className="grid-2" style={{ gridTemplateColumns: "2fr 1fr" }}>
         <Field label="Duur van een intake">

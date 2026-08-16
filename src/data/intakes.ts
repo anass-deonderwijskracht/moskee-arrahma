@@ -4,15 +4,21 @@ import type { Tables } from "@/types/database";
 
 export const FIXED_INTAKE_START = "09:00";
 export const FIXED_INTAKE_END = "12:00";
+export const DEFAULT_INTAKE_MESSAGE = "Beste ouder,\n\nHierbij uw persoonlijke link voor het intakeformulier: [link]";
 
 export type IntakeStatus = "concept" | "actief" | "verlopen";
 export type IntakeSlot = Tables<"intake_slots">;
 export type IntakeChoice = Tables<"intake_choices"> & {
   enrollments: { child_name: string } | null;
+  intake_slots: Pick<IntakeSlot, "date" | "start_time" | "end_time"> | null;
+};
+export type IntakeAttendance = Tables<"intake_attendance"> & {
+  enrollments: { child_name: string } | null;
 };
 export type IntakeMoment = Tables<"intake_moments"> & {
   intake_slots: IntakeSlot[];
   intake_choices: IntakeChoice[];
+  intake_attendance: IntakeAttendance[];
 };
 
 export type IntakeSlotInput = {
@@ -29,6 +35,7 @@ export type SaveIntakeMomentInput = {
   duration_text: string;
   status: IntakeStatus;
   allow_other: boolean;
+  message_template: string;
   slots: IntakeSlotInput[];
 };
 
@@ -67,7 +74,15 @@ function sortMoment(moment: IntakeMoment): IntakeMoment {
     intake_choices: [...(moment.intake_choices ?? [])].sort((a, b) =>
       (a.enrollments?.child_name ?? "").localeCompare(b.enrollments?.child_name ?? "", "nl"),
     ),
+    intake_attendance: [...(moment.intake_attendance ?? [])].sort((a, b) =>
+      (a.enrollments?.child_name ?? "").localeCompare(b.enrollments?.child_name ?? "", "nl"),
+    ),
   };
+}
+
+/** Vervangt iedere [link]-variabele, zodat dezelfde template meermaals kan linken. */
+export function renderIntakeMessage(template: string, link: string): string {
+  return template.replaceAll("[link]", link);
 }
 
 export function useIntakeMoments() {
@@ -76,7 +91,7 @@ export function useIntakeMoments() {
     queryFn: async (): Promise<IntakeMoment[]> => {
       const { data, error } = await supabase
         .from("intake_moments")
-        .select("*, intake_slots(*), intake_choices(*, enrollments(child_name))")
+        .select("*, intake_slots(*), intake_choices(*, enrollments(child_name), intake_slots(date, start_time, end_time)), intake_attendance(*, enrollments(child_name))")
         .order("created_at", { ascending: false });
       if (error) throw error;
       return ((data as unknown as IntakeMoment[]) ?? []).map(sortMoment);
@@ -94,6 +109,7 @@ export function useSaveIntakeMoment() {
         duration_text: input.duration_text.trim(),
         status: input.status,
         allow_other: input.allow_other,
+        message_template: input.message_template.trim(),
       };
 
       if (momentId) {
@@ -187,6 +203,52 @@ export function useDeleteIntakeChoices() {
       qc.invalidateQueries({ queryKey: ["intake-moments"] });
       qc.invalidateQueries({ queryKey: ["active-intake-overview"] });
     },
+  });
+}
+
+export function useSetIntakeAttendance() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ intakeMomentId, enrollmentId, attended }: {
+      intakeMomentId: string;
+      enrollmentId: string;
+      attended: boolean;
+    }) => {
+      const { error } = await supabase.from("intake_attendance").upsert({
+        intake_moment_id: intakeMomentId,
+        enrollment_id: enrollmentId,
+        attended,
+      } as never, { onConflict: "intake_moment_id,enrollment_id" });
+      if (error) throw error;
+    },
+    onMutate: async ({ intakeMomentId, enrollmentId, attended }) => {
+      await qc.cancelQueries({ queryKey: ["intake-moments"] });
+      const previous = qc.getQueryData<IntakeMoment[]>(["intake-moments"]);
+      qc.setQueryData<IntakeMoment[]>(["intake-moments"], (moments) => moments?.map((moment) => {
+        if (moment.id !== intakeMomentId) return moment;
+        const existing = moment.intake_attendance.find((row) => row.enrollment_id === enrollmentId);
+        const nextRow: IntakeAttendance = existing
+          ? { ...existing, attended, updated_at: new Date().toISOString() }
+          : {
+              intake_moment_id: intakeMomentId,
+              enrollment_id: enrollmentId,
+              attended,
+              updated_at: new Date().toISOString(),
+              enrollments: null,
+            };
+        return {
+          ...moment,
+          intake_attendance: existing
+            ? moment.intake_attendance.map((row) => row.enrollment_id === enrollmentId ? nextRow : row)
+            : [...moment.intake_attendance, nextRow],
+        };
+      }));
+      return { previous };
+    },
+    onError: (_error, _variables, context) => {
+      if (context?.previous) qc.setQueryData(["intake-moments"], context.previous);
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: ["intake-moments"] }),
   });
 }
 

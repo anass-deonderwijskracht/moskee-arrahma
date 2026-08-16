@@ -227,7 +227,8 @@ export interface Database {
       intake_moments: {
         Row: {
           id: string; description: string; duration_text: string;
-          status: string; allow_other: boolean; created_at: string; updated_at: string;
+          status: string; allow_other: boolean; message_template: string;
+          created_at: string; updated_at: string;
         };
         Insert: { description: string; duration_text: string } & Partial<Database["public"]["Tables"]["intake_moments"]["Row"]>;
         Update: Partial<Database["public"]["Tables"]["intake_moments"]["Row"]>;
@@ -250,6 +251,16 @@ export interface Database {
         };
         Insert: { intake_moment_id: string; enrollment_id: string } & Partial<Database["public"]["Tables"]["intake_choices"]["Row"]>;
         Update: Partial<Database["public"]["Tables"]["intake_choices"]["Row"]>;
+        Relationships: [];
+      };
+      intake_attendance: {
+        Row: {
+          intake_moment_id: string; enrollment_id: string;
+          attended: boolean; updated_at: string;
+        };
+        Insert: { intake_moment_id: string; enrollment_id: string }
+          & Partial<Database["public"]["Tables"]["intake_attendance"]["Row"]>;
+        Update: Partial<Database["public"]["Tables"]["intake_attendance"]["Row"]>;
         Relationships: [];
       };
       enrollment_parents: {

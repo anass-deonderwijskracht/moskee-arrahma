@@ -115,7 +115,7 @@
 /* --- Intakebeheer -------------------------------------------------------- */
 .intake-summary {
   display: grid;
-  grid-template-columns: minmax(280px, 1fr) 180px 160px;
+  grid-template-columns: minmax(280px, 1fr) 180px 160px 120px;
   gap: 14px;
   align-items: stretch;
   margin-bottom: 18px;
@@ -177,6 +177,14 @@
 .intake-active-note { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 8px; color: var(--success); background: var(--success-soft); font-size: 12.5px; }
 .intake-other-setting { display: flex; flex-direction: column; gap: 5px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 9px; background: var(--bg-sunken); }
 .intake-enrollment-cell { min-width: 170px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.intake-table-picker { display: flex; align-items: center; gap: 8px; min-width: min(430px, 48vw); }
+.intake-table-picker label { color: var(--fg-subtle); font-size: 11px; font-weight: 650; text-transform: uppercase; letter-spacing: 0.05em; }
+.intake-table-picker .select { min-width: 310px; }
+.intake-parent-cell { min-width: 145px; }
+.intake-primary-parent { display: inline-flex; align-items: center; gap: 3px; margin-top: 3px; color: var(--success); font-size: 10.5px; font-weight: 650; }
+.intake-attendance-check { display: inline-flex; align-items: center; gap: 7px; padding: 6px 9px; border: 1px solid var(--border); border-radius: 7px; background: var(--bg-elev); cursor: pointer; font-size: 12px; font-weight: 600; }
+.intake-attendance-check input { width: 16px; height: 16px; accent-color: var(--primary); }
+.intake-attendance-check:has(input:checked) { border-color: var(--success); background: var(--success-soft); color: var(--success); }
 .scroll-x { overflow-x: auto; }
 
 /* --- Publiek persoonlijk intakeformulier -------------------------------- */
@@ -279,4 +287,6 @@
   .public-intake-actions { flex-direction: column-reverse; }
   .public-intake-actions > button { width: 100%; }
   .public-intake-confirm, .public-intake-state { padding: 30px 20px; }
+  .intake-table-picker { min-width: 0; width: 100%; align-items: flex-start; flex-direction: column; }
+  .intake-table-picker .select { width: 100%; min-width: 0; }
 }
