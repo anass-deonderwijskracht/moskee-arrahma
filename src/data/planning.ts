@@ -269,3 +269,49 @@ export function useSaveLessons(schooljaarId: string | null) {
     },
   });
 }
+
+// ---------------------------------------------------------------------------
+// Jaarlijn: alle lessen van een schooljaar op datum, voor de tijdlijnweergave
+// ---------------------------------------------------------------------------
+
+export interface YearClass extends MatrixClass { day: string | null }
+export interface YearLesson {
+  id: string; class_id: string; date: string; week_nr: number | null;
+  type: string; topic: string | null;
+  teacher_id: string | null; quran_teacher_id: string | null;
+  teacher_na: boolean; quran_na: boolean;
+}
+
+/**
+ * Klassen plus al hun lessen van één schooljaar, op datum gesorteerd.
+ *
+ * Bewust niet `usePlanningMatrix` hergebruikt: die groepeert op `week_nr` en
+ * houdt per klas/week één les over. Een tijdlijn hangt aan datums, en moet ook
+ * lessen tonen die (nog) geen weeknummer hebben.
+ */
+export function usePlanningYear(schooljaarId: string | null) {
+  return useQuery({
+    queryKey: ["planning-year", schooljaarId],
+    enabled: !!schooljaarId,
+    queryFn: async (): Promise<{ classes: YearClass[]; lessons: YearLesson[] }> => {
+      const { data: classRows, error: cErr } = await supabase
+        .from("classes")
+        .select("id, code, grade, track, color, day")
+        .eq("schooljaar_id", schooljaarId!)
+        .eq("historic", false)
+        .eq("is_next", false);
+      if (cErr) throw cErr;
+      const classes = ((classRows ?? []) as YearClass[])
+        .sort((a, b) => a.code.localeCompare(b.code, "nl", { numeric: true, sensitivity: "base" }));
+      if (!classes.length) return { classes, lessons: [] };
+
+      const { data, error } = await supabase
+        .from("lessons")
+        .select("id, class_id, date, week_nr, type, topic, teacher_id, quran_teacher_id, teacher_na, quran_na")
+        .in("class_id", classes.map((c) => c.id))
+        .order("date");
+      if (error) throw error;
+      return { classes, lessons: ((data ?? []) as YearLesson[]) };
+    },
+  });
+}

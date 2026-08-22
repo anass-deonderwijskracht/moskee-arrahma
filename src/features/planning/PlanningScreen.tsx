@@ -4,8 +4,9 @@ import { Loading } from "@/features/_shared/states";
 import { useClasses } from "@/data/classes";
 import { useCurrentSchooljaar } from "@/data/schooljaren";
 import { Roostermatrix } from "./Roostermatrix";
+import { Jaarlijn } from "./Jaarlijn";
 
-type View = "calendar" | "table" | "rooster";
+type View = "calendar" | "table" | "rooster" | "jaarlijn";
 
 interface Ev { id: string; title: string; day: "Zaterdag" | "Zondag"; start: string; end: string; teacher: string; location: string; color: string; }
 
@@ -29,11 +30,16 @@ export function PlanningScreen() {
     { value: "calendar", label: "Kalender" },
     { value: "table", label: "Tabel" },
     { value: "rooster", label: "Docentenrooster" },
+    { value: "jaarlijn", label: "Jaarlijn" },
   ];
 
   return (
-    <Section title="Planning" sub="Weekoverzicht, roosters en docententoewijzing per lesweek" actions={<Pills value={view} onChange={setView} options={viewPills} />}>
-      {view === "rooster" ? <Roostermatrix /> : isLoading ? <Loading /> : view === "calendar" ? <Calendar events={events} /> : <PlanningTable events={events} />}
+    <Section title="Planning" sub="Weekoverzicht, roosters, docententoewijzing en de jaarlijn per schooljaar" actions={<Pills value={view} onChange={setView} options={viewPills} />}>
+      {view === "rooster" ? <Roostermatrix />
+        : view === "jaarlijn" ? <Jaarlijn />
+        : isLoading ? <Loading />
+        : view === "calendar" ? <Calendar events={events} />
+        : <PlanningTable events={events} />}
     </Section>
   );
 }
